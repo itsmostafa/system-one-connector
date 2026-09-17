@@ -1,8 +1,8 @@
 # Typesafe MCP
 
-**Give your AI agent typed judgments instead of free text.** `jev` is an MCP server that lets Claude Code, Claude Desktop, and Codex call [TypeSafe](https://typesafe.ai)'s Jev model and get back probabilities they can branch on.
+**Give your AI agent typed judgments instead of free text.** `jev` is an MCP server that lets Claude Code, Claude Desktop, and Codex call [TypeSafe](https://typesafe.ai)'s Jev model and get back probabilities they can branch on. One command, `jev mcp setup`, registers it with all three.
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/itsmostafa/typesafe-mcp.svg)](https://pkg.go.dev/github.com/itsmostafa/typesafe-mcp)
+[![Latest release](https://img.shields.io/github/v/release/itsmostafa/typesafe-mcp?sort=semver)](https://github.com/itsmostafa/typesafe-mcp/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Go version](https://img.shields.io/github/go-mod/go-version/itsmostafa/typesafe-mcp)
 
@@ -18,15 +18,17 @@
 
 **Problem:** When an agent needs a yes/no call, a routing decision, or a severity rating, it usually asks an LLM, then parses prose and hopes the format holds. The answer has no probability attached, so the agent cannot tell a confident "yes" from a coin flip.
 
-**Solution:** `jev` exposes one tool, `evaluate`, that sends state plus typed questions to Jev and returns structured answers with probabilities. Nothing to parse and no prompt formatting to maintain. One command wires it into every MCP client you have installed.
+**Solution:** `jev` exposes one tool, `evaluate`, that sends state plus typed questions to Jev and returns structured answers with probabilities. Nothing to parse and no prompt formatting to maintain. `jev mcp setup` wires it into Claude Desktop, Claude Code, and Codex in one step.
 
 ## Quickstart
 
-**1. Install**
+**1. Install** (macOS and Linux, amd64 and arm64):
 
 ```sh
-go install github.com/itsmostafa/typesafe-mcp/cmd/jev@latest
+curl -fsSL https://raw.githubusercontent.com/itsmostafa/typesafe-mcp/main/install.sh | sh
 ```
+
+It installs to `~/.local/bin`. If that is not on your `PATH`, add it with `export PATH="$HOME/.local/bin:$PATH"`. With Go, you can instead run `go install github.com/itsmostafa/typesafe-mcp/cmd/jev@latest`.
 
 **2. Register with your agents** (get a key at https://console.typesafe.ai/)
 
@@ -55,8 +57,8 @@ It gets back the raw TypeSafe response JSON, with each answer under the same id 
 
 ## What you get
 
-- **Answers your code can branch on.** Three question types: `noul` (probability a condition holds), `choice` (one option from a map), `score` (position on ordered levels).
 - **One-command setup across clients.** `jev mcp setup` registers with Claude Code (user scope) and Codex when their CLIs are on `PATH`, and with Claude Desktop when it is installed. Every `TYPESAFE_*` variable in your shell is carried over. Re-run it to update.
+- **Answers your code can branch on.** Three question types: `noul` (probability a condition holds), `choice` (one option from a map), `score` (position on ordered levels).
 - **Rate limits handled for you.** 429 and 529 responses are retried with exponential backoff. Other API errors come back to the agent as tool errors it can read and act on.
 - **Several questions, one call.** Batch independent questions over the same state; they run in parallel.
 - **Agents that use it well out of the box.** The server ships usage guidance (narrow questions, JSON state, no-match options) to the client, so the agent writes better questions without extra prompting.
