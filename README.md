@@ -22,11 +22,13 @@
 
 ## Quickstart
 
-**1. Install**
+**1. Install** (macOS and Linux, amd64 and arm64):
 
 ```sh
-go install github.com/itsmostafa/typesafe-mcp/cmd/jev@latest
+curl -fsSL https://raw.githubusercontent.com/itsmostafa/typesafe-mcp/main/install.sh | sh
 ```
+
+With Go, you can instead run `go install github.com/itsmostafa/typesafe-mcp/cmd/jev@latest`.
 
 **2. Register with your agents** (get a key at https://console.typesafe.ai/)
 
