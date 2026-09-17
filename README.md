@@ -1,9 +1,9 @@
 # Typesafe MCP
 
-**Give your AI agent typed judgments instead of free text.** `jev` is an MCP server that lets Claude Code, Claude Desktop, and Codex call TypeSafe's Jev model and get back probabilities they can branch on.
+**Give your AI agent typed judgments instead of free text.** `jev` is an MCP server that lets Claude Code, Claude Desktop, and Codex call [TypeSafe](https://typesafe.ai)'s Jev model and get back probabilities they can branch on.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/itsmostafa/typesafe-mcp.svg)](https://pkg.go.dev/github.com/itsmostafa/typesafe-mcp)
-[![Go Report Card](https://goreportcard.com/badge/github.com/itsmostafa/typesafe-mcp)](https://goreportcard.com/report/github.com/itsmostafa/typesafe-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Go version](https://img.shields.io/github/go-mod/go-version/itsmostafa/typesafe-mcp)
 
 ```
@@ -61,6 +61,12 @@ It gets back the raw TypeSafe response JSON, with each answer under the same id 
 - **Several questions, one call.** Batch independent questions over the same state; they run in parallel.
 - **Agents that use it well out of the box.** The server ships usage guidance (narrow questions, JSON state, no-match options) to the client, so the agent writes better questions without extra prompting.
 - **A single static binary.** No runtime, no Node, no Python. Read-only tool, 60s request timeout, response size capped at 16 MiB.
+
+## About TypeSafe
+
+[TypeSafe](https://typesafe.ai) builds System One models: small units of AI intelligence you use like programming primitives. Instead of generating text, they turn natural language and application state into typed judgments and probabilities that code can combine. Jev is one of them.
+
+[Website](https://typesafe.ai) · [Docs](https://docs.typesafe.ai) · [API reference](https://docs.typesafe.ai/api) · [Console](https://console.typesafe.ai/)
 
 ## Reference
 
