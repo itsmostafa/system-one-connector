@@ -28,7 +28,7 @@
 curl -fsSL https://raw.githubusercontent.com/itsmostafa/typesafe-mcp/main/install.sh | sh
 ```
 
-With Go, you can instead run `go install github.com/itsmostafa/typesafe-mcp/cmd/jev@latest`.
+It installs to `~/.local/bin`. If that is not on your `PATH`, add it with `export PATH="$HOME/.local/bin:$PATH"`. With Go, you can instead run `go install github.com/itsmostafa/typesafe-mcp/cmd/jev@latest`.
 
 **2. Register with your agents** (get a key at https://console.typesafe.ai/)
 
