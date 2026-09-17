@@ -1,0 +1,14 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "go",
+      "initial-version": "0.1.0",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": false,
+      "draft": true,
+      "force-tag-creation": true
+    }
+  },
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
+}
