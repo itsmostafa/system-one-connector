@@ -1,0 +1,90 @@
+# Typesafe MCP
+
+**Give your AI agent typed judgments instead of free text.** `jev` is an MCP server that lets Claude Code, Claude Desktop, and Codex call TypeSafe's Jev model and get back probabilities they can branch on.
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/itsmostafa/typesafe-mcp.svg)](https://pkg.go.dev/github.com/itsmostafa/typesafe-mcp)
+[![Go Report Card](https://goreportcard.com/badge/github.com/itsmostafa/typesafe-mcp)](https://goreportcard.com/report/github.com/itsmostafa/typesafe-mcp)
+![Go version](https://img.shields.io/github/go-mod/go-version/itsmostafa/typesafe-mcp)
+
+```
+┌──────────────┐  evaluate   ┌─────────┐  POST /v1/systemone  ┌──────────────┐
+│ Claude Code  │ ──────────▶ │   jev   │ ───────────────────▶ │ TypeSafe API │
+│ Claude Desk. │   (stdio)   │  (MCP)  │  retries 429 / 529   │   (Jev)      │
+│ Codex        │ ◀────────── │         │ ◀─────────────────── │              │
+└──────────────┘ typed JSON  └─────────┘                      └──────────────┘
+```
+
+## Why this exists
+
+**Problem:** When an agent needs a yes/no call, a routing decision, or a severity rating, it usually asks an LLM, then parses prose and hopes the format holds. The answer has no probability attached, so the agent cannot tell a confident "yes" from a coin flip.
+
+**Solution:** `jev` exposes one tool, `evaluate`, that sends state plus typed questions to Jev and returns structured answers with probabilities. Nothing to parse and no prompt formatting to maintain. One command wires it into every MCP client you have installed.
+
+## Quickstart
+
+**1. Install**
+
+```sh
+go install github.com/itsmostafa/typesafe-mcp/cmd/jev@latest
+```
+
+**2. Register with your agents** (get a key at https://console.typesafe.ai/)
+
+```sh
+TYPESAFE_API_KEY=your-key jev mcp setup
+```
+
+**3. Ask your agent a judgment question**
+
+> "Use jev to decide whether this ticket is urgent and which team should own it: *Help! My payouts have been failing for 3 days.*"
+
+The agent calls `evaluate` with:
+
+```json
+{
+  "state": "Help! My payouts have been failing for 3 days.",
+  "questions": {
+    "is_urgent": {"type": "noul", "instructions": "Does this convey urgency?"},
+    "department": {"type": "choice", "instructions": "Which team should handle this?",
+      "criteria": {"billing": "Payments, refunds", "technical": "Bugs, outages", "sales": "Pricing"}}
+  }
+}
+```
+
+It gets back the raw TypeSafe response JSON, with each answer under the same id you gave it.
+
+## What you get
+
+- **Answers your code can branch on.** Three question types: `noul` (probability a condition holds), `choice` (one option from a map), `score` (position on ordered levels).
+- **One-command setup across clients.** `jev mcp setup` registers with Claude Code (user scope) and Codex when their CLIs are on `PATH`, and with Claude Desktop when it is installed. Every `TYPESAFE_*` variable in your shell is carried over. Re-run it to update.
+- **Rate limits handled for you.** 429 and 529 responses are retried with exponential backoff. Other API errors come back to the agent as tool errors it can read and act on.
+- **Several questions, one call.** Batch independent questions over the same state; they run in parallel.
+- **Agents that use it well out of the box.** The server ships usage guidance (narrow questions, JSON state, no-match options) to the client, so the agent writes better questions without extra prompting.
+- **A single static binary.** No runtime, no Node, no Python. Read-only tool, 60s request timeout, response size capped at 16 MiB.
+
+## Reference
+
+### `evaluate`
+
+| Field | Required | Description |
+|---|---|---|
+| `state` | yes | Content to judge: plain text, or a JSON object/array with named fields |
+| `questions` | yes | Map of question id to `{type, instructions, criteria?}` |
+| `model` | no | Defaults to `jev-latest` |
+
+Criteria by type: `noul` takes optional `{"true": ..., "false": ...}` descriptions; `choice` requires a map of option to description; `score` requires an ordered array of at least 2 levels. Full docs: https://docs.typesafe.ai/api
+
+### Manual client config
+
+Skip `jev mcp setup` and point your client at `/absolute/path/to/jev mcp` with `TYPESAFE_API_KEY` in its env. Restart Claude Desktop after any config change.
+
+## Contributing
+
+Issues and pull requests are welcome. The repo uses [Task](https://taskfile.dev):
+
+```sh
+task check     # gofmt, go vet, and tests with -race
+task inspect   # open the MCP Inspector against a local build
+```
+
+If `jev` saves you some prompt-parsing, a star helps others find it.

@@ -1,0 +1,56 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - task --list
+    silent: true
+
+  build:
+    desc: Build the jev binary
+    cmds:
+      - go build -o jev ./cmd/jev
+    sources:
+      - cmd/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - jev
+
+  test:
+    desc: Run tests with the race detector
+    cmds:
+      - go test -race -count=1 ./...
+
+  lint:
+    desc: Check formatting and vet
+    cmds:
+      - test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - go vet ./...
+
+  fmt:
+    desc: Format Go code
+    cmds:
+      - gofmt -w .
+
+  check:
+    desc: Lint and test
+    cmds:
+      - task: lint
+      - task: test
+
+  install:
+    desc: Install jev into GOBIN
+    cmds:
+      - go install ./cmd/jev
+
+  inspect:
+    desc: Open the MCP Inspector against the server
+    deps: [build]
+    cmds:
+      - npx @modelcontextprotocol/inspector ./jev mcp
+
+  tidy:
+    desc: Tidy go.mod
+    cmds:
+      - go mod tidy
