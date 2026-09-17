@@ -67,6 +67,9 @@ func newRootCmd() *cobra.Command {
 	})
 	root.AddCommand(
 		mcpCmd,
+		&cobra.Command{Use: "update", Short: "Update jev to the latest release", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+			return runUpdate(cmd.Context())
+		}},
 		&cobra.Command{Use: "version", Short: "Print the version", Args: cobra.NoArgs, Run: func(*cobra.Command, []string) {
 			fmt.Println(version)
 		}},

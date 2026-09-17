@@ -28,7 +28,7 @@
 curl -fsSL https://raw.githubusercontent.com/itsmostafa/typesafe-mcp/main/install.sh | sh
 ```
 
-It installs to `~/.local/bin`. If that is not on your `PATH`, add it with `export PATH="$HOME/.local/bin:$PATH"`. With Go, you can instead run `go install github.com/itsmostafa/typesafe-mcp/cmd/jev@latest`.
+It installs to `~/.local/bin`. If that is not on your `PATH`, add it with `export PATH="$HOME/.local/bin:$PATH"`. With Go, you can instead run `go install github.com/itsmostafa/typesafe-mcp/cmd/jev@latest`. Run `jev update` to upgrade in place.
 
 **2. Register with your agents** (get a key at https://console.typesafe.ai/)
 
@@ -62,7 +62,7 @@ It gets back the raw TypeSafe response JSON, with each answer under the same id 
 - **Rate limits handled for you.** 429 and 529 responses are retried with exponential backoff. Other API errors come back to the agent as tool errors it can read and act on.
 - **Several questions, one call.** Batch independent questions over the same state; they run in parallel.
 - **Agents that use it well out of the box.** The server ships usage guidance (narrow questions, JSON state, no-match options) to the client, so the agent writes better questions without extra prompting.
-- **A single static binary.** No runtime, no Node, no Python. Read-only tool, 60s request timeout, response size capped at 16 MiB.
+- **A single static binary.** No runtime, no Node, no Python. `jev update` upgrades it in place from a checksum-verified release. Read-only tool, 60s request timeout, response size capped at 16 MiB.
 
 ## About TypeSafe
 
