@@ -1,6 +1,6 @@
 # Typesafe MCP
 
-**Give your AI agent typed judgments instead of free text.** `jev` is an MCP server that lets Claude Code, Claude Desktop, Codex, and [pi](https://pi.dev) call [TypeSafe](https://typesafe.ai)'s Jev model and get back probabilities they can branch on. One command, `jev setup mcp`, registers it with the first three; `jev setup pi` covers pi.
+**Give your AI agent typed evaluations instead of free text.** `jev` is an MCP server that lets Claude Code, Claude Desktop, Codex, and [pi](https://pi.dev) call [TypeSafe](https://typesafe.ai)'s Jev model and get back probabilities they can branch on. One command, `jev setup mcp`, registers it with the first three; `jev setup pi` covers pi.
 
 [![Latest release](https://img.shields.io/github/v/release/itsmostafa/typesafe-mcp?sort=semver)](https://github.com/itsmostafa/typesafe-mcp/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)

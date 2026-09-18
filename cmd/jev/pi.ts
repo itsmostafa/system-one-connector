@@ -118,10 +118,13 @@ export default function (pi: ExtensionAPI) {
     name: "evaluate",
     label: "Jev",
     description:
-      "Run a Jev prompt: evaluate state against one or more typed questions (noul, choice, score) " +
-      "and return typed answers with probabilities and confidence.",
+      "Jev is a fast structured-decision model: unstructured state in, typed answers " +
+      "(noul, choice, score) with calibrated confidence out; 70-500ms, schema-enforced. " +
+      "Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
+      "and map-reduce over large data — wherever hand-written logic is too brittle or latency matters. " +
+      "Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options).",
     promptSnippet:
-      "Judge state against typed questions with Jev and get probabilities to branch on, instead of parsing prose.",
+      "Classify, route, score, extract, or guard with Jev: typed answers and calibrated confidence to branch on, in 70-500ms, instead of parsing prose.",
     // filter: an empty INSTRUCTIONS must not inject a blank guideline.
     promptGuidelines: INSTRUCTIONS.split("\n").filter(Boolean),
     parameters: Type.Object({
