@@ -149,7 +149,7 @@ export default function (pi: ExtensionAPI) {
             criteria: Type.Optional(
               Type.Any({
                 description:
-                  'noul: optional {"true": ..., "false": ...} descriptions; choice (required): map of option to description or null; score (required): ordered array of at least 2 level descriptions',
+                  'noul: optional {"true": ..., "false": ...} descriptions; choice (required): map of option to description or null; score (required): ordered array of at least 2 level descriptions, e.g. ["poor", "fair", "good"] — an array, not the index-keyed object the response legend comes back as',
               }),
             ),
           }),

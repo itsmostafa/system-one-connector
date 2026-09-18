@@ -32,6 +32,7 @@ const instructions = `The evaluate tool runs Jev, a TypeSafe System One model th
 - Batch independent questions over the same state into one call; they run in parallel and cannot see each other's answers.
 - Include a no-match option in a choice when nothing may fit. Score levels must describe concrete situations.
 - A noul near 0.5 means uncertain, not medium intensity. Confidence measures how concentrated the distribution is, not correctness.
+- Score criteria are an ordered array; the answer is 0-indexed, so N levels score 0 to N-1. A 3.87 over 5 levels sits between levels 3 and 4, not 3.87/5. Report it with the labels from the response ` + "`legend`" + `, and read ` + "`probabilities`" + ` alongside it.
 Docs: https://docs.typesafe.ai/llms.txt`
 
 func main() {

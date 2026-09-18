@@ -97,7 +97,9 @@ It gets back the raw response JSON, with each answer under the same id you gave 
 | `questions` | yes | Map of question id to `{type, instructions, criteria?}` |
 | `model` | no | Defaults to `jev-latest`, or `~typesafe/jev-latest` on OpenRouter |
 
-Criteria by type: `noul` takes optional `{"true": ..., "false": ...}` descriptions; `choice` requires a map of option to description; `score` requires an ordered array of at least 2 levels. Full docs: https://docs.typesafe.ai/api
+Criteria by type: `noul` takes optional `{"true": ..., "false": ...}` descriptions; `choice` requires a map of option to description; `score` requires an ordered array of at least 2 levels. Malformed criteria are rejected locally, before the request, with the field path you sent.
+
+Score answers are **0-indexed**: N levels score `0` to `N-1`. A `3.87` over 5 levels means between levels 3 and 4, not `3.87/5`. The response carries a `legend` mapping each index to your level description, plus a `probabilities` entry per level. Full docs: https://docs.typesafe.ai/api
 
 ### Manual client config
 
