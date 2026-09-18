@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/itsmostafa/typesafe-mcp/compare/v0.2.0...v0.3.0) (2026-09-18)
+
+
+### Features
+
+* **client:** run Jev through OpenRouter as well as the TypeSafe API ([12c1aaa](https://github.com/itsmostafa/typesafe-mcp/commit/12c1aaabcd614b65477f0110375c3e80600238aa))
+* **client:** run Jev through OpenRouter as well as the TypeSafe API ([1c79b89](https://github.com/itsmostafa/typesafe-mcp/commit/1c79b89a36bd78a060e246f0e51d5645a5cf0728))
+
 ## [0.2.0](https://github.com/itsmostafa/typesafe-mcp/compare/v0.1.0...v0.2.0) (2026-09-17)
 
 
