@@ -187,3 +187,59 @@ func TestExtractBinaryRejectsNonRegularMember(t *testing.T) {
 		t.Fatalf("expected non-regular member to be rejected, got %v", err)
 	}
 }
+
+func TestWritePiExtension(t *testing.T) {
+	dir := t.TempDir()
+	path, err := writePiExtension(dir, `/bin/je"v`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(dir, "extensions", "jev.ts"); path != want {
+		t.Fatalf("path = %q, want %q", path, want)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(b)
+	// The quote in the path must come back escaped, not as a broken literal.
+	if !strings.Contains(src, `const JEV = "/bin/je\"v"`) {
+		t.Fatalf("binary path not rendered: %s", src)
+	}
+	if !strings.Contains(src, "A noul near 0.5 means uncertain") {
+		t.Fatal("instructions not rendered")
+	}
+	if strings.Contains(src, "__JEV_") {
+		t.Fatal("placeholder left behind")
+	}
+}
+
+func TestPiDir(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ env, want string }{
+		{"", filepath.Join(home, ".pi", "agent")},
+		// pi expands "~" itself, so taking it literally would miss a real install.
+		{"~", home},
+		{"~/.pi/agent", filepath.Join(home, ".pi", "agent")},
+		{"/tmp/pi", "/tmp/pi"},
+	} {
+		t.Setenv("PI_CODING_AGENT_DIR", tc.env)
+		got, err := piDir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != tc.want {
+			t.Errorf("piDir() with %q = %q, want %q", tc.env, got, tc.want)
+		}
+	}
+	// An absolute override must not need a home directory: sanitized
+	// environments (env -i PI_CODING_AGENT_DIR=...) have none.
+	t.Setenv("HOME", "")
+	t.Setenv("PI_CODING_AGENT_DIR", "/tmp/pi")
+	if got, err := piDir(); err != nil || got != "/tmp/pi" {
+		t.Errorf("piDir() without HOME = %q, %v, want %q, nil", got, err, "/tmp/pi")
+	}
+}
