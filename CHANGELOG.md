@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.1](https://github.com/itsmostafa/typesafe-mcp/compare/v0.4.0...v0.4.1) (2026-09-18)
+
+
+### Features
+
+* **tools:** reject malformed criteria before the API request ([58c8012](https://github.com/itsmostafa/typesafe-mcp/commit/58c801294f14c5ba8370ed914e1806837a73991c))
+* **tools:** reject malformed criteria before the API request ([8ba84b2](https://github.com/itsmostafa/typesafe-mcp/commit/8ba84b26dd79e86a4c9c660461ea02b205992ea3))
+* **tools:** warn agents against priming state with their own conclusions ([1167615](https://github.com/itsmostafa/typesafe-mcp/commit/1167615df775d9204f6883b0f5aa72ed86ee58d1))
+* **tools:** warn agents against priming state with their own conclusions ([febaa39](https://github.com/itsmostafa/typesafe-mcp/commit/febaa39befaeed6d5f9045f2bb400c71eefb5e73))
+
+
+### Miscellaneous Chores
+
+* release 0.4.1 ([386726b](https://github.com/itsmostafa/typesafe-mcp/commit/386726bf74be889861bf55f7978ad2c31694309b))
+
 ## [0.4.0](https://github.com/itsmostafa/typesafe-mcp/compare/v0.3.0...v0.4.0) (2026-09-18)
 
 
