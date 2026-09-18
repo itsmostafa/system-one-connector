@@ -1,0 +1,37 @@
+# cmd/evaluate
+
+Tests all sit in `evaluate_test.go`, table-driven over `httptest`.
+
+| File | Holds |
+|---|---|
+| `main.go` | cobra command tree, `route` (endpoint from env), the `instructions` const |
+| `client.go` | POSTs the request; retries 429/529 with backoff up to 3 times, 16 MiB body cap |
+| `tools.go` | the `evaluate` tool: input schema in `jsonschema` struct tags, plus `validate` |
+| `setup.go` | registration for Claude Code/Desktop, Codex and pi; renders `pi.ts` |
+| `update.go` | self-update from a checksum-verified GitHub release |
+| `pi.ts` | pi extension template, embedded and rendered by `setup.go` |
+
+## Constraints
+
+- `instructions` in `main.go` is served as the MCP server instructions *and* baked into the pi extension, so editing it there covers both. The tool description and the `jsonschema` field descriptions in `tools.go` do **not** flow: `pi.ts` hand-copies them as TypeBox descriptions. Change those four strings in lockstep.
+- Every line of `instructions` is one guideline: `pi.ts` splits the const on newlines, so a bullet wrapped across two physical lines ships as two broken guidelines.
+- Stdout of `evaluate mcp` carries the MCP protocol; diagnostics go to stderr.
+- `route` prefers `TYPESAFE_API_KEY` over `OPENROUTER_API_KEY`, so a stray OpenRouter key cannot re-bill an existing setup. An explicit `model` passes through unmapped, whichever route is live.
+- `validate` rejects only the criteria shapes the API definitely refuses; unknown question types pass through, because the API enumerates more of them than this tool documents.
+- `pi.ts` must stay valid TypeScript once `__EVALUATE_BINARY__` and `__EVALUATE_INSTRUCTIONS__` are replaced with JSON-marshaled strings. `node --check` covers syntax and `pi -e cmd/evaluate/pi.ts` covers behaviour; there is no tsc and no Node dev dependency.
+
+## Tool reference
+
+`evaluate` takes `state` (raw evidence to judge), `questions` (id → `{type, instructions, criteria?}`) and an optional `model`.
+
+| Type | `criteria` |
+|---|---|
+| `noul` | optional `{"true": ..., "false": ...}` descriptions |
+| `choice` | required: map of option to description |
+| `score` | required: ordered array of level descriptions, low to high |
+
+Score answers are 0-indexed: N levels score `0` to `N-1`, so `3.87` over 5 levels sits between levels 3 and 4, not `3.87/5`. The response carries a `legend` mapping index to level, plus a `probabilities` entry per level. Full API docs: https://docs.typesafe.ai/api
+
+## Manual client config
+
+Point any MCP client at `/absolute/path/to/evaluate mcp` with `TYPESAFE_API_KEY` (or `OPENROUTER_API_KEY`) in its env; restart Claude Desktop after a config change. For pi by hand, copy `pi.ts` to `~/.pi/agent/extensions/evaluate.ts` (or `$PI_CODING_AGENT_DIR/extensions/`) and replace `__EVALUATE_BINARY__` with the quoted absolute path to the binary and `__EVALUATE_INSTRUCTIONS__` with a quoted guidance string.
