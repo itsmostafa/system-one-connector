@@ -28,7 +28,7 @@ type question struct {
 type evaluateIn struct {
 	State     any                 `json:"state" jsonschema:"content to judge: plain text, or a JSON object/array with named fields"`
 	Questions map[string]question `json:"questions" jsonschema:"map of question id to question; answers come back under the same ids, which are not sent to the model"`
-	Model     string              `json:"model,omitempty" jsonschema:"model to use; default jev-latest"`
+	Model     string              `json:"model,omitempty" jsonschema:"model to use; defaults to the latest Jev on whichever endpoint is configured"`
 }
 
 func registerTools(s *mcp.Server, c *Client) {
@@ -45,8 +45,11 @@ func registerTools(s *mcp.Server, c *Client) {
 			return nil, errors.New("questions must not be empty")
 		}
 		if in.Model == "" {
-			in.Model = "jev-latest"
+			in.Model = c.Model
 		}
+		// ponytail: an explicit model passes through as given, so a TypeSafe
+		// name sent to OpenRouter (or the reverse) is a 404 the agent reads.
+		// Map slugs per route if that starts to bite.
 		return c.Evaluate(ctx, in)
 	})
 }

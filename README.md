@@ -9,9 +9,9 @@
 ```
 ┌──────────────┐  evaluate   ┌─────────┐  POST /v1/systemone  ┌──────────────┐
 │ Claude Code  │ ──────────▶ │   jev   │ ───────────────────▶ │ TypeSafe API │
-│ Claude Desk. │   (stdio)   │  (MCP)  │  retries 429 / 529   │   (Jev)      │
-│ Codex        │ ◀────────── │         │ ◀─────────────────── │              │
-└──────────────┘ typed JSON  └─────────┘                      └──────────────┘
+│ Claude Desk. │   (stdio)   │  (MCP)  │  retries 429 / 529   │  ── or ──    │
+│ Codex        │ ◀────────── │         │ ◀─────────────────── │  OpenRouter  │
+└──────────────┘ typed JSON  └─────────┘   POST /decisions    └──────────────┘
 ```
 
 ## Why this exists
@@ -36,6 +36,14 @@ It installs to `~/.local/bin`. If that is not on your `PATH`, add it with `expor
 TYPESAFE_API_KEY=your-key jev mcp setup
 ```
 
+Already on [OpenRouter](https://openrouter.ai/~typesafe/jev-latest)? Use that key instead and jev routes through OpenRouter's Decisions endpoint, billed to your OpenRouter account:
+
+```sh
+OPENROUTER_API_KEY=your-key jev mcp setup
+```
+
+`TYPESAFE_API_KEY` wins if both are set. OpenRouter's Decisions endpoint is still on its `/api/alpha/` path and may move.
+
 **3. Ask your agent a judgment question**
 
 > "Use jev to decide whether this ticket is urgent and which team should own it: *Help! My payouts have been failing for 3 days.*"
@@ -53,11 +61,11 @@ The agent calls `evaluate` with:
 }
 ```
 
-It gets back the raw TypeSafe response JSON, with each answer under the same id you gave it.
+It gets back the raw response JSON, with each answer under the same id you gave it.
 
 ## What you get
 
-- **One-command setup across clients.** `jev mcp setup` registers with Claude Code (user scope) and Codex when their CLIs are on `PATH`, and with Claude Desktop when it is installed. Every `TYPESAFE_*` variable in your shell is carried over. Re-run it to update.
+- **One-command setup across clients.** `jev mcp setup` registers with Claude Code (user scope) and Codex when their CLIs are on `PATH`, and with Claude Desktop when it is installed. Every `TYPESAFE_*` variable in your shell is carried over, plus `OPENROUTER_API_KEY`. Re-run it to update.
 - **Answers your code can branch on.** Three question types: `noul` (probability a condition holds), `choice` (one option from a map), `score` (position on ordered levels).
 - **Rate limits handled for you.** 429 and 529 responses are retried with exponential backoff. Other API errors come back to the agent as tool errors it can read and act on.
 - **Several questions, one call.** Batch independent questions over the same state; they run in parallel.
@@ -78,13 +86,13 @@ It gets back the raw TypeSafe response JSON, with each answer under the same id 
 |---|---|---|
 | `state` | yes | Content to judge: plain text, or a JSON object/array with named fields |
 | `questions` | yes | Map of question id to `{type, instructions, criteria?}` |
-| `model` | no | Defaults to `jev-latest` |
+| `model` | no | Defaults to `jev-latest`, or `~typesafe/jev-latest` on OpenRouter |
 
 Criteria by type: `noul` takes optional `{"true": ..., "false": ...}` descriptions; `choice` requires a map of option to description; `score` requires an ordered array of at least 2 levels. Full docs: https://docs.typesafe.ai/api
 
 ### Manual client config
 
-Skip `jev mcp setup` and point your client at `/absolute/path/to/jev mcp` with `TYPESAFE_API_KEY` in its env. Restart Claude Desktop after any config change.
+Skip `jev mcp setup` and point your client at `/absolute/path/to/jev mcp` with `TYPESAFE_API_KEY` (or `OPENROUTER_API_KEY`) in its env. Restart Claude Desktop after any config change.
 
 ## Contributing
 

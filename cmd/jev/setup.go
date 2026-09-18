@@ -17,10 +17,11 @@ import (
 var goRunDir = regexp.MustCompile(`/go-build\d+/`)
 
 // runMCPSetup registers this binary as the "jev" MCP server with Claude Code
-// and Codex, via their own CLIs, baking in the TYPESAFE_* variables from the
-// current environment: clients launch the server without the user's shell env.
+// and Codex, via their own CLIs, baking in the TYPESAFE_* variables and
+// OPENROUTER_API_KEY from the current environment: clients launch the server
+// without the user's shell env.
 func runMCPSetup(ctx context.Context) error {
-	if _, err := apiKey(); err != nil {
+	if _, err := route(); err != nil {
 		return err
 	}
 	exe, err := os.Executable()
@@ -31,12 +32,7 @@ func runMCPSetup(ctx context.Context) error {
 		return fmt.Errorf("refusing to configure %s: `go run` binaries are deleted on exit; build or install jev first", exe)
 	}
 
-	var env []string
-	for _, kv := range os.Environ() {
-		if strings.HasPrefix(kv, "TYPESAFE_") {
-			env = append(env, kv)
-		}
-	}
+	env := setupEnv(os.Environ())
 
 	var errs []error
 	fail := func(name string, err error) {
@@ -177,6 +173,19 @@ func claudeUserEntry() []byte {
 		return nil
 	}
 	return cfg.MCPServers["jev"]
+}
+
+// setupEnv picks the variables to bake into the client configs: every
+// TYPESAFE_* knob, plus the OpenRouter key for that route. The "=" anchors the
+// name, so OPENROUTER_API_KEY_OTHER is left behind.
+func setupEnv(environ []string) []string {
+	var env []string
+	for _, kv := range environ {
+		if strings.HasPrefix(kv, "TYPESAFE_") || strings.HasPrefix(kv, "OPENROUTER_API_KEY=") {
+			env = append(env, kv)
+		}
+	}
+	return env
 }
 
 type setupCommand struct {

@@ -77,26 +77,37 @@ func newRootCmd() *cobra.Command {
 	return root
 }
 
-// apiKey returns TYPESAFE_API_KEY from the environment.
-func apiKey() (string, error) {
-	key := os.Getenv("TYPESAFE_API_KEY")
-	if key == "" {
-		return "", errors.New("TYPESAFE_API_KEY must be set (create one at https://console.typesafe.ai/)")
+// route picks the evaluation endpoint from the environment: the TypeSafe API
+// when TYPESAFE_API_KEY is set, otherwise OpenRouter's Decisions router.
+// TypeSafe wins when both are set, so an OPENROUTER_API_KEY left in the shell
+// by another tool cannot silently reroute and re-bill an existing setup.
+func route() (*Client, error) {
+	switch {
+	case os.Getenv("TYPESAFE_API_KEY") != "":
+		return &Client{
+			URL:    "https://api.typesafe.ai/v1/systemone",
+			APIKey: os.Getenv("TYPESAFE_API_KEY"),
+			Model:  "jev-latest",
+		}, nil
+	case os.Getenv("OPENROUTER_API_KEY") != "":
+		return &Client{
+			// ponytail: /api/alpha/ is OpenRouter's alpha path and may move.
+			URL:    "https://openrouter.ai/api/alpha/decisions",
+			APIKey: os.Getenv("OPENROUTER_API_KEY"),
+			Model:  "~typesafe/jev-latest",
+		}, nil
 	}
-	return key, nil
+	return nil, errors.New("set TYPESAFE_API_KEY (https://console.typesafe.ai/) or OPENROUTER_API_KEY (https://openrouter.ai/keys)")
 }
 
 func serve(ctx context.Context) error {
-	key, err := apiKey()
+	c, err := route()
 	if err != nil {
 		return err
 	}
+	c.HTTP = &http.Client{Timeout: 60 * time.Second}
+	c.Backoff = time.Second
 	s := mcp.NewServer(&mcp.Implementation{Name: "jev", Version: version}, &mcp.ServerOptions{Instructions: instructions})
-	registerTools(s, &Client{
-		BaseURL: "https://api.typesafe.ai",
-		APIKey:  key,
-		HTTP:    &http.Client{Timeout: 60 * time.Second},
-		Backoff: time.Second,
-	})
+	registerTools(s, c)
 	return s.Run(ctx, &mcp.StdioTransport{})
 }

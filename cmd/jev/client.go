@@ -13,10 +13,12 @@ import (
 // maxBody caps response size so an oversized reply cannot exhaust memory.
 const maxBody = 16 << 20
 
-// Client calls the TypeSafe API.
+// Client calls a Jev evaluation endpoint: the TypeSafe API directly, or
+// OpenRouter's Decisions router. Both take the same request body.
 type Client struct {
-	BaseURL, APIKey string
-	HTTP            *http.Client
+	// URL is the full endpoint, not a base. Model is the route's default.
+	URL, APIKey, Model string
+	HTTP               *http.Client
 	// Backoff is the first retry delay for 429/529; it doubles each attempt.
 	Backoff time.Duration
 }
@@ -31,7 +33,7 @@ func (c *Client) Evaluate(ctx context.Context, req any) ([]byte, error) {
 	}
 	delay := c.Backoff
 	for attempt := 0; ; attempt++ {
-		r, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/v1/systemone", bytes.NewReader(body))
+		r, err := http.NewRequestWithContext(ctx, http.MethodPost, c.URL, bytes.NewReader(body))
 		if err != nil {
 			return nil, err
 		}
@@ -51,7 +53,7 @@ func (c *Client) Evaluate(ctx context.Context, req any) ([]byte, error) {
 		}
 		retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == 529
 		if !retryable || attempt == 3 {
-			return nil, fmt.Errorf("typesafe: %s: %s", resp.Status, b)
+			return nil, fmt.Errorf("jev: %s: %s", resp.Status, b)
 		}
 		select {
 		case <-ctx.Done():
