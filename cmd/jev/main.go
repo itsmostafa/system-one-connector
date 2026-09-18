@@ -57,16 +57,28 @@ func newRootCmd() *cobra.Command {
 	mcpCmd := &cobra.Command{Use: "mcp", Short: "Run the MCP server over stdio", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		return serve(cmd.Context())
 	}}
-	mcpCmd.AddCommand(&cobra.Command{
-		Use:   "setup",
-		Short: "Register this binary with Claude Code, Claude Desktop, and Codex",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runMCPSetup(cmd.Context())
+	setupCmd := &cobra.Command{Use: "setup", Short: "Register this binary with your agents"}
+	setupCmd.AddCommand(
+		&cobra.Command{
+			Use:   "mcp",
+			Short: "Register with Claude Code, Claude Desktop, and Codex",
+			Args:  cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return runMCPSetup(cmd.Context())
+			},
 		},
-	})
+		&cobra.Command{
+			Use:   "pi",
+			Short: "Install the jev extension for pi",
+			Args:  cobra.NoArgs,
+			RunE: func(*cobra.Command, []string) error {
+				return runPiSetup()
+			},
+		},
+	)
 	root.AddCommand(
 		mcpCmd,
+		setupCmd,
 		&cobra.Command{Use: "update", Short: "Update jev to the latest release", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 			return runUpdate(cmd.Context())
 		}},

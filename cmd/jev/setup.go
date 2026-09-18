@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,18 @@ import (
 // goRunDir matches the temp directory `go run` builds into, deleted on exit.
 var goRunDir = regexp.MustCompile(`/go-build\d+/`)
 
+// jevBinary returns the absolute path clients should be pointed at.
+func jevBinary() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("finding current executable: %w", err)
+	}
+	if goRunDir.MatchString(exe) {
+		return "", fmt.Errorf("refusing to configure %s: `go run` binaries are deleted on exit; build or install jev first", exe)
+	}
+	return exe, nil
+}
+
 // runMCPSetup registers this binary as the "jev" MCP server with Claude Code
 // and Codex, via their own CLIs, baking in the TYPESAFE_* variables and
 // OPENROUTER_API_KEY from the current environment: clients launch the server
@@ -24,12 +37,9 @@ func runMCPSetup(ctx context.Context) error {
 	if _, err := route(); err != nil {
 		return err
 	}
-	exe, err := os.Executable()
+	exe, err := jevBinary()
 	if err != nil {
-		return fmt.Errorf("finding current executable: %w", err)
-	}
-	if goRunDir.MatchString(exe) {
-		return fmt.Errorf("refusing to configure %s: `go run` binaries are deleted on exit; build or install jev first", exe)
+		return err
 	}
 
 	env := setupEnv(os.Environ())
@@ -206,4 +216,69 @@ func setupCommands(exe string, env []string) []setupCommand {
 		{"Claude Code", "claude", []string{"mcp", "remove", "jev", "-s", "user"}, append(claude, "--", exe, "mcp")},
 		{"Codex", "codex", nil, append(codex, "--", exe, "mcp")},
 	}
+}
+
+//go:embed pi.ts
+var piExtension string
+
+// runPiSetup installs the jev extension into pi. pi has no MCP client, so the
+// extension registers `evaluate` as a native pi tool and speaks MCP to this
+// binary itself.
+func runPiSetup() error {
+	exe, err := jevBinary()
+	if err != nil {
+		return err
+	}
+	dir := os.Getenv("PI_CODING_AGENT_DIR")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		dir = filepath.Join(home, ".pi", "agent")
+	}
+	if _, err := os.Stat(dir); err != nil {
+		fmt.Println("➖ pi not found, skipped (see README to install by hand)")
+		return nil
+	}
+	fmt.Println("🔎 pi detected")
+	path, err := writePiExtension(dir, exe)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("   wrote %s\n", path)
+
+	fmt.Println("\n✅ Setup complete!")
+	fmt.Println("Run /reload in pi, or restart it, to load the jev extension.")
+	// Unlike the MCP clients, nothing is baked in: the extension reads the key
+	// from the shell pi runs in, so a missing one is a hint, not a failure.
+	if _, err := route(); err != nil {
+		fmt.Printf("\nNote: %v\n", err)
+	}
+	return nil
+}
+
+// writePiExtension renders the embedded extension into dir and returns its path.
+func writePiExtension(dir, exe string) (string, error) {
+	// json.Marshal, not a bare quoted placeholder: it escapes a path, or the
+	// instructions' newlines and backticks, into a valid JS string literal.
+	binary, err := json.Marshal(exe)
+	if err != nil {
+		return "", err
+	}
+	guide, err := json.Marshal(instructions)
+	if err != nil {
+		return "", err
+	}
+	src := strings.NewReplacer(
+		"__JEV_BINARY__", string(binary),
+		"__JEV_INSTRUCTIONS__", string(guide),
+	).Replace(piExtension)
+
+	out := filepath.Join(dir, "extensions")
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(out, "jev.ts")
+	return path, os.WriteFile(path, []byte(src), 0o600)
 }

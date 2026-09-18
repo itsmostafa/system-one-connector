@@ -187,3 +187,29 @@ func TestExtractBinaryRejectsNonRegularMember(t *testing.T) {
 		t.Fatalf("expected non-regular member to be rejected, got %v", err)
 	}
 }
+
+func TestWritePiExtension(t *testing.T) {
+	dir := t.TempDir()
+	path, err := writePiExtension(dir, `/bin/je"v`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(dir, "extensions", "jev.ts"); path != want {
+		t.Fatalf("path = %q, want %q", path, want)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(b)
+	// The quote in the path must come back escaped, not as a broken literal.
+	if !strings.Contains(src, `const JEV = "/bin/je\"v"`) {
+		t.Fatalf("binary path not rendered: %s", src)
+	}
+	if !strings.Contains(src, "A noul near 0.5 means uncertain") {
+		t.Fatal("instructions not rendered")
+	}
+	if strings.Contains(src, "__JEV_") {
+		t.Fatal("placeholder left behind")
+	}
+}
