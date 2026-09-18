@@ -57,7 +57,14 @@ func newRootCmd() *cobra.Command {
 	mcpCmd := &cobra.Command{Use: "mcp", Short: "Run the MCP server over stdio", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		return serve(cmd.Context())
 	}}
-	setupCmd := &cobra.Command{Use: "setup", Short: "Register this binary with your agents"}
+	// Args+RunE, not a bare parent: cobra checks Runnable before validating args,
+	// so without both `jev setup typo` prints help and exits 0.
+	setupCmd := &cobra.Command{
+		Use:   "setup",
+		Short: "Register this binary with your agents",
+		Args:  cobra.NoArgs,
+		RunE:  func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
+	}
 	setupCmd.AddCommand(
 		&cobra.Command{
 			Use:   "mcp",

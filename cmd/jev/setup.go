@@ -221,6 +221,26 @@ func setupCommands(exe string, env []string) []setupCommand {
 //go:embed pi.ts
 var piExtension string
 
+// piDir returns pi's config directory. PI_CODING_AGENT_DIR wins, and a leading
+// "~" is expanded because pi expands it too: taking it literally would make the
+// override silently miss an existing install.
+func piDir() (string, error) {
+	dir := os.Getenv("PI_CODING_AGENT_DIR")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case dir == "":
+		return filepath.Join(home, ".pi", "agent"), nil
+	case dir == "~":
+		return home, nil
+	case strings.HasPrefix(dir, "~/"):
+		return filepath.Join(home, dir[2:]), nil
+	}
+	return dir, nil
+}
+
 // runPiSetup installs the jev extension into pi. pi has no MCP client, so the
 // extension registers `evaluate` as a native pi tool and speaks MCP to this
 // binary itself.
@@ -229,13 +249,9 @@ func runPiSetup() error {
 	if err != nil {
 		return err
 	}
-	dir := os.Getenv("PI_CODING_AGENT_DIR")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return err
-		}
-		dir = filepath.Join(home, ".pi", "agent")
+	dir, err := piDir()
+	if err != nil {
+		return err
 	}
 	if _, err := os.Stat(dir); err != nil {
 		fmt.Println("➖ pi not found, skipped (see README to install by hand)")

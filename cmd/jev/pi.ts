@@ -24,6 +24,12 @@ const PROTOCOL_VERSION = "2025-06-18"
 // ponytail: one jev process per call; pool or keep one warm if latency shows up.
 function callEvaluate(args: unknown, signal?: AbortSignal): Promise<string> {
   return new Promise<string>((resolve, reject) => {
+    // addEventListener does not replay an abort that already happened, so an
+    // aborted call would otherwise spawn jev and bill a request nobody wants.
+    if (signal?.aborted) {
+      reject(new Error("evaluate: aborted"))
+      return
+    }
     const child = spawn(JEV, ["mcp"], { stdio: ["pipe", "pipe", "pipe"], env: process.env })
 
     let settled = false
@@ -38,6 +44,13 @@ function callEvaluate(args: unknown, signal?: AbortSignal): Promise<string> {
     }
     const onAbort = () => finish(new Error("evaluate: aborted"))
     signal?.addEventListener("abort", onAbort, { once: true })
+
+    // A write error lands on the stream, not on the child, and an unhandled one
+    // takes down the whole pi process. EPIPE only means jev exited first, and the
+    // close handler below reports why, so it needs no message of its own.
+    child.stdin.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code !== "EPIPE") finish(err)
+    })
 
     let stderr = ""
     child.stderr.setEncoding("utf8")

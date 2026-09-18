@@ -213,3 +213,26 @@ func TestWritePiExtension(t *testing.T) {
 		t.Fatal("placeholder left behind")
 	}
 }
+
+func TestPiDir(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ env, want string }{
+		{"", filepath.Join(home, ".pi", "agent")},
+		// pi expands "~" itself, so taking it literally would miss a real install.
+		{"~", home},
+		{"~/.pi/agent", filepath.Join(home, ".pi", "agent")},
+		{"/tmp/pi", "/tmp/pi"},
+	} {
+		t.Setenv("PI_CODING_AGENT_DIR", tc.env)
+		got, err := piDir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != tc.want {
+			t.Errorf("piDir() with %q = %q, want %q", tc.env, got, tc.want)
+		}
+	}
+}
