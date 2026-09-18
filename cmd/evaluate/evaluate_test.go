@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -115,10 +116,12 @@ func TestSetupCommands(t *testing.T) {
 	want := [][]string{
 		{"mcp", "remove", "evaluate", "-s", "user"},
 		{"mcp", "add", "evaluate", "-s", "user", "-e", "TYPESAFE_API_KEY=k", "-e", "OPENROUTER_API_KEY=o", "--", "/bin/evaluate", "mcp"},
+		{"mcp", "remove", "jev", "-s", "user"},
 		nil,
 		{"mcp", "add", "evaluate", "--env", "TYPESAFE_API_KEY=k", "--env", "OPENROUTER_API_KEY=o", "--", "/bin/evaluate", "mcp"},
+		{"mcp", "remove", "jev"},
 	}
-	got := [][]string{cmds[0].reset, cmds[0].add, cmds[1].reset, cmds[1].add}
+	got := [][]string{cmds[0].reset, cmds[0].add, cmds[0].legacy, cmds[1].reset, cmds[1].add, cmds[1].legacy}
 	if !slices.EqualFunc(got, want, slices.Equal) {
 		t.Fatalf("got %q\nwant %q", got, want)
 	}
@@ -126,7 +129,7 @@ func TestSetupCommands(t *testing.T) {
 
 func TestSetupClaudeDesktop(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "claude_desktop_config.json")
-	seed := `{"mcpServers":{"lumi":{"command":"/bin/lumi"},"evaluate":{"command":"/old"}},"preferences":{"sidebarMode":"chat"}}`
+	seed := `{"mcpServers":{"lumi":{"command":"/bin/lumi"},"evaluate":{"command":"/old"},"jev":{"command":"/gone"}},"preferences":{"sidebarMode":"chat"}}`
 	if err := os.WriteFile(path, []byte(seed), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -151,6 +154,10 @@ func TestSetupClaudeDesktop(t *testing.T) {
 	}
 	if got.MCPServers["lumi"].Command != "/bin/lumi" || got.Preferences["sidebarMode"] != "chat" {
 		t.Fatalf("other keys lost: %s", b)
+	}
+	// The pre-rename entry has to go, or the client keeps launching /gone.
+	if _, ok := got.MCPServers["jev"]; ok {
+		t.Fatalf("legacy jev entry kept: %s", b)
 	}
 
 	for _, seed := range []string{`null`, `{"mcpServers":null}`} {
@@ -190,9 +197,20 @@ func TestExtractBinaryRejectsNonRegularMember(t *testing.T) {
 
 func TestWritePiExtension(t *testing.T) {
 	dir := t.TempDir()
+	// A pre-rename install: both files would register the tool `evaluate`.
+	legacy := filepath.Join(dir, "extensions", "jev.ts")
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacy, []byte("// old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	path, err := writePiExtension(dir, `/bin/je"v`)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := os.Stat(legacy); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("legacy jev.ts kept: %v", err)
 	}
 	if want := filepath.Join(dir, "extensions", "evaluate.ts"); path != want {
 		t.Fatalf("path = %q, want %q", path, want)

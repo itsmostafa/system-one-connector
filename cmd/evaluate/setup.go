@@ -70,6 +70,12 @@ func runMCPSetup(ctx context.Context) error {
 					errs = append(errs, fmt.Errorf("%s: restoring previous entry: %w", c.name, err))
 				}
 			}
+		} else {
+			// Only now the replacement is registered: rollback restores the
+			// "evaluate" entry, so dropping "jev" before a failed add would
+			// leave a pre-rename install with no server at all. Best effort,
+			// since a missing entry is the normal case.
+			exec.CommandContext(ctx, c.cli, c.legacy...).Run()
 		}
 	}
 
@@ -137,6 +143,9 @@ func setupClaudeDesktop(path, exe string, env []string) error {
 		}
 		entry.Env[k] = v
 	}
+	// Same rename cleanup as setupCommand.legacy, for the client with no CLI.
+	// Safe to do before the write: the whole config lands atomically below.
+	delete(servers, "jev")
 	if servers["evaluate"], err = json.Marshal(entry); err != nil {
 		return err
 	}
@@ -199,8 +208,13 @@ func setupEnv(environ []string) []string {
 }
 
 type setupCommand struct {
-	name, cli  string
-	reset, add []string
+	name, cli string
+	// legacy removes the "jev" entry this binary registered before it was
+	// renamed; left behind, it fails to launch a path that no longer exists
+	// every time the client starts. The name is the only signal available —
+	// codex has no config read path — so a server someone else named "jev"
+	// would go too. Acceptable: this tool owned that name.
+	reset, add, legacy []string
 }
 
 func setupCommands(exe string, env []string) []setupCommand {
@@ -213,8 +227,8 @@ func setupCommands(exe string, env []string) []setupCommand {
 	}
 	return []setupCommand{
 		// `claude mcp add` refuses an existing name; `codex mcp add` overwrites.
-		{"Claude Code", "claude", []string{"mcp", "remove", "evaluate", "-s", "user"}, append(claude, "--", exe, "mcp")},
-		{"Codex", "codex", nil, append(codex, "--", exe, "mcp")},
+		{"Claude Code", "claude", []string{"mcp", "remove", "evaluate", "-s", "user"}, append(claude, "--", exe, "mcp"), []string{"mcp", "remove", "jev", "-s", "user"}},
+		{"Codex", "codex", nil, append(codex, "--", exe, "mcp"), []string{"mcp", "remove", "jev"}},
 	}
 }
 
@@ -301,5 +315,14 @@ func writePiExtension(dir, exe string) (string, error) {
 		return "", err
 	}
 	path := filepath.Join(out, "evaluate.ts")
-	return path, os.WriteFile(path, []byte(src), 0o600)
+	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+		return "", err
+	}
+	// Both files register a tool named `evaluate`, so a leftover jev.ts from
+	// before the rename would collide with the one just written. Removed after
+	// the write, so a failed write leaves pi with the old extension, not none.
+	if err := os.Remove(filepath.Join(out, "jev.ts")); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return path, err
+	}
+	return path, nil
 }
