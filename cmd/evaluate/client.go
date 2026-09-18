@@ -53,7 +53,7 @@ func (c *Client) Evaluate(ctx context.Context, req any) ([]byte, error) {
 		}
 		retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == 529
 		if !retryable || attempt == 3 {
-			return nil, fmt.Errorf("jev: %s: %s", resp.Status, b)
+			return nil, fmt.Errorf("evaluate: %s: %s", resp.Status, b)
 		}
 		select {
 		case <-ctx.Done():

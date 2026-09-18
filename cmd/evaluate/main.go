@@ -1,4 +1,4 @@
-// Command jev is an MCP stdio server for running TypeSafe Jev prompts.
+// Command evaluate is an MCP stdio server for running TypeSafe Jev prompts.
 package main
 
 import (
@@ -39,14 +39,14 @@ func main() {
 	err := newRootCmd().ExecuteContext(ctx)
 	stop()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "jev:", err)
+		fmt.Fprintln(os.Stderr, "evaluate:", err)
 		os.Exit(1)
 	}
 }
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:     "jev",
+		Use:     "evaluate",
 		Short:   "MCP server for TypeSafe Jev prompts",
 		Version: version,
 		// Stdout carries the MCP protocol; main reports errors on stderr.
@@ -58,7 +58,7 @@ func newRootCmd() *cobra.Command {
 		return serve(cmd.Context())
 	}}
 	// Args+RunE, not a bare parent: cobra checks Runnable before validating args,
-	// so without both `jev setup typo` prints help and exits 0.
+	// so without both `evaluate setup typo` prints help and exits 0.
 	setupCmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Register this binary with your agents",
@@ -76,7 +76,7 @@ func newRootCmd() *cobra.Command {
 		},
 		&cobra.Command{
 			Use:   "pi",
-			Short: "Install the jev extension for pi",
+			Short: "Install the evaluate extension for pi",
 			Args:  cobra.NoArgs,
 			RunE: func(*cobra.Command, []string) error {
 				return runPiSetup()
@@ -86,7 +86,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(
 		mcpCmd,
 		setupCmd,
-		&cobra.Command{Use: "update", Short: "Update jev to the latest release", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		&cobra.Command{Use: "update", Short: "Update evaluate to the latest release", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 			return runUpdate(cmd.Context())
 		}},
 		&cobra.Command{Use: "version", Short: "Print the version", Args: cobra.NoArgs, Run: func(*cobra.Command, []string) {
@@ -126,7 +126,7 @@ func serve(ctx context.Context) error {
 	}
 	c.HTTP = &http.Client{Timeout: 60 * time.Second}
 	c.Backoff = time.Second
-	s := mcp.NewServer(&mcp.Implementation{Name: "jev", Version: version}, &mcp.ServerOptions{Instructions: instructions})
+	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: version}, &mcp.ServerOptions{Instructions: instructions})
 	registerTools(s, c)
 	return s.Run(ctx, &mcp.StdioTransport{})
 }

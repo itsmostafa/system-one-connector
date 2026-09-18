@@ -43,13 +43,13 @@ jobs:
         run: |
           for goos in darwin linux; do
             for goarch in amd64 arm64; do
-              GOOS=$goos GOARCH=$goarch go build -ldflags="-s -w -X main.version=${TAG}" -o jev ./cmd/jev
-              tar -czf "jev-${goos}-${goarch}.tar.gz" jev LICENSE
+              GOOS=$goos GOARCH=$goarch go build -ldflags="-s -w -X main.version=${TAG}" -o evaluate ./cmd/evaluate
+              tar -czf "evaluate-${goos}-${goarch}.tar.gz" evaluate LICENSE
             done
           done
-          sha256sum jev-*.tar.gz > SHA256SUMS.txt
+          sha256sum evaluate-*.tar.gz > SHA256SUMS.txt
           cat SHA256SUMS.txt
-          gh release upload "$TAG" jev-*.tar.gz SHA256SUMS.txt --clobber --repo ${{ github.repository }}
+          gh release upload "$TAG" evaluate-*.tar.gz SHA256SUMS.txt --clobber --repo ${{ github.repository }}
 
   verify-release:
     needs: [release-please, build-release]
@@ -61,4 +61,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release edit "${{ needs.release-please.outputs.tag_name }}" --draft=false --repo ${{ github.repository }}
       - name: Verify install.sh end to end
-        run: JEV_INSTALL_DIR="$RUNNER_TEMP/bin" sh install.sh
+        run: EVALUATE_INSTALL_DIR="$RUNNER_TEMP/bin" sh install.sh

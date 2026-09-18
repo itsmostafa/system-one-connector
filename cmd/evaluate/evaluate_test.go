@@ -111,12 +111,12 @@ func TestSetupEnv(t *testing.T) {
 }
 
 func TestSetupCommands(t *testing.T) {
-	cmds := setupCommands("/bin/jev", []string{"TYPESAFE_API_KEY=k", "OPENROUTER_API_KEY=o"})
+	cmds := setupCommands("/bin/evaluate", []string{"TYPESAFE_API_KEY=k", "OPENROUTER_API_KEY=o"})
 	want := [][]string{
-		{"mcp", "remove", "jev", "-s", "user"},
-		{"mcp", "add", "jev", "-s", "user", "-e", "TYPESAFE_API_KEY=k", "-e", "OPENROUTER_API_KEY=o", "--", "/bin/jev", "mcp"},
+		{"mcp", "remove", "evaluate", "-s", "user"},
+		{"mcp", "add", "evaluate", "-s", "user", "-e", "TYPESAFE_API_KEY=k", "-e", "OPENROUTER_API_KEY=o", "--", "/bin/evaluate", "mcp"},
 		nil,
-		{"mcp", "add", "jev", "--env", "TYPESAFE_API_KEY=k", "--env", "OPENROUTER_API_KEY=o", "--", "/bin/jev", "mcp"},
+		{"mcp", "add", "evaluate", "--env", "TYPESAFE_API_KEY=k", "--env", "OPENROUTER_API_KEY=o", "--", "/bin/evaluate", "mcp"},
 	}
 	got := [][]string{cmds[0].reset, cmds[0].add, cmds[1].reset, cmds[1].add}
 	if !slices.EqualFunc(got, want, slices.Equal) {
@@ -126,11 +126,11 @@ func TestSetupCommands(t *testing.T) {
 
 func TestSetupClaudeDesktop(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "claude_desktop_config.json")
-	seed := `{"mcpServers":{"lumi":{"command":"/bin/lumi"},"jev":{"command":"/old"}},"preferences":{"sidebarMode":"chat"}}`
+	seed := `{"mcpServers":{"lumi":{"command":"/bin/lumi"},"evaluate":{"command":"/old"}},"preferences":{"sidebarMode":"chat"}}`
 	if err := os.WriteFile(path, []byte(seed), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := setupClaudeDesktop(path, "/bin/jev", []string{"TYPESAFE_API_KEY=k"}); err != nil {
+	if err := setupClaudeDesktop(path, "/bin/evaluate", []string{"TYPESAFE_API_KEY=k"}); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(path)
@@ -145,9 +145,9 @@ func TestSetupClaudeDesktop(t *testing.T) {
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
-	s := got.MCPServers["jev"]
-	if s.Command != "/bin/jev" || !slices.Equal(s.Args, []string{"mcp"}) || s.Env["TYPESAFE_API_KEY"] != "k" {
-		t.Fatalf("jev entry = %+v", s)
+	s := got.MCPServers["evaluate"]
+	if s.Command != "/bin/evaluate" || !slices.Equal(s.Args, []string{"mcp"}) || s.Env["TYPESAFE_API_KEY"] != "k" {
+		t.Fatalf("evaluate entry = %+v", s)
 	}
 	if got.MCPServers["lumi"].Command != "/bin/lumi" || got.Preferences["sidebarMode"] != "chat" {
 		t.Fatalf("other keys lost: %s", b)
@@ -157,20 +157,20 @@ func TestSetupClaudeDesktop(t *testing.T) {
 		if err := os.WriteFile(path, []byte(seed), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := setupClaudeDesktop(path, "/bin/jev", nil); err != nil {
+		if err := setupClaudeDesktop(path, "/bin/evaluate", nil); err != nil {
 			t.Fatalf("seed %s: %v", seed, err)
 		}
 	}
 }
 
-// A tar member named "jev" that is a symlink (or any other non-regular entry)
+// A tar member named "evaluate" that is a symlink (or any other non-regular entry)
 // must not be extracted and installed over the running binary.
 func TestExtractBinaryRejectsNonRegularMember(t *testing.T) {
 	var buf bytes.Buffer
 	gw := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gw)
 	if err := tw.WriteHeader(&tar.Header{
-		Name:     "jev",
+		Name:     "evaluate",
 		Typeflag: tar.TypeSymlink,
 		Linkname: "/etc/passwd",
 		Mode:     0o777,
@@ -183,7 +183,7 @@ func TestExtractBinaryRejectsNonRegularMember(t *testing.T) {
 		}
 	}
 
-	if err := extractBinaryFromTar(buf.Bytes(), "jev", io.Discard); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+	if err := extractBinaryFromTar(buf.Bytes(), "evaluate", io.Discard); err == nil || !strings.Contains(err.Error(), "not a regular file") {
 		t.Fatalf("expected non-regular member to be rejected, got %v", err)
 	}
 }
@@ -194,7 +194,7 @@ func TestWritePiExtension(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := filepath.Join(dir, "extensions", "jev.ts"); path != want {
+	if want := filepath.Join(dir, "extensions", "evaluate.ts"); path != want {
 		t.Fatalf("path = %q, want %q", path, want)
 	}
 	b, err := os.ReadFile(path)
@@ -203,13 +203,13 @@ func TestWritePiExtension(t *testing.T) {
 	}
 	src := string(b)
 	// The quote in the path must come back escaped, not as a broken literal.
-	if !strings.Contains(src, `const JEV = "/bin/je\"v"`) {
+	if !strings.Contains(src, `const BINARY = "/bin/je\"v"`) {
 		t.Fatalf("binary path not rendered: %s", src)
 	}
 	if !strings.Contains(src, "A noul near 0.5 means uncertain") {
 		t.Fatal("instructions not rendered")
 	}
-	if strings.Contains(src, "__JEV_") {
+	if strings.Contains(src, "__EVALUATE_") {
 		t.Fatal("placeholder left behind")
 	}
 }
