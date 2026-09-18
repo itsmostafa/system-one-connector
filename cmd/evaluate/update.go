@@ -23,7 +23,7 @@ const githubRepo = "itsmostafa/typesafe-mcp"
 
 const (
 	// One deadline covers connect, headers and body: a stalled mirror must not
-	// hang `jev update` forever.
+	// hang `evaluate update` forever.
 	updateTimeout = 5 * time.Minute
 	// Release JSON and SHA256SUMS.txt are a few KB; the archive is one
 	// compressed binary. Both caps are generous by orders of magnitude.
@@ -80,10 +80,10 @@ func runUpdate(ctx context.Context) error {
 	// Stage beside exe so the final rename never crosses filesystems, and an
 	// unwritable install dir fails before anything is downloaded. CreateTemp's
 	// exclusive random name can't be redirected by a planted symlink.
-	staged, err := os.CreateTemp(filepath.Dir(exe), ".jev-update-*")
+	staged, err := os.CreateTemp(filepath.Dir(exe), ".evaluate-update-*")
 	if err != nil {
 		if errors.Is(err, os.ErrPermission) {
-			return fmt.Errorf("%s is not writable, re-run with: sudo jev update", filepath.Dir(exe))
+			return fmt.Errorf("%s is not writable, re-run with: sudo evaluate update", filepath.Dir(exe))
 		}
 		return fmt.Errorf("staging update: %w", err)
 	}
@@ -102,7 +102,7 @@ func runUpdate(ctx context.Context) error {
 	}
 	fmt.Printf("Updating %s → %s\n", version, release.TagName)
 
-	archiveName := fmt.Sprintf("jev-%s-%s.tar.gz", runtime.GOOS, runtime.GOARCH)
+	archiveName := fmt.Sprintf("evaluate-%s-%s.tar.gz", runtime.GOOS, runtime.GOARCH)
 	archiveURL, err := findAssetURL(release.Assets, archiveName)
 	if err != nil {
 		return err
@@ -125,7 +125,7 @@ func runUpdate(ctx context.Context) error {
 		return fmt.Errorf("checksum mismatch: got %s, want %s", got, expectedHash)
 	}
 
-	if err := extractBinaryFromTar(archive, "jev", staged); err != nil {
+	if err := extractBinaryFromTar(archive, "evaluate", staged); err != nil {
 		return fmt.Errorf("extracting binary: %w", err)
 	}
 	if err := staged.Close(); err != nil {
@@ -138,7 +138,7 @@ func runUpdate(ctx context.Context) error {
 		return fmt.Errorf("replacing executable: %w", err)
 	}
 
-	fmt.Printf("Updated to %s. Run `jev version` to confirm.\n", release.TagName)
+	fmt.Printf("Updated to %s. Run `evaluate version` to confirm.\n", release.TagName)
 	return nil
 }
 

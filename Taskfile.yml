@@ -7,16 +7,16 @@ tasks:
     silent: true
 
   build:
-    desc: Build the jev binary
+    desc: Build the evaluate binary
     cmds:
-      - go build -o jev ./cmd/jev
+      - go build -o evaluate ./cmd/evaluate
     sources:
       - cmd/**/*.go
       - cmd/**/*.ts
       - go.mod
       - go.sum
     generates:
-      - jev
+      - evaluate
 
   test:
     desc: Run tests with the race detector
@@ -41,15 +41,15 @@ tasks:
       - task: test
 
   install:
-    desc: Install jev into GOBIN
+    desc: Install evaluate into GOBIN
     cmds:
-      - go install ./cmd/jev
+      - go install ./cmd/evaluate
 
   inspect:
     desc: Open the MCP Inspector against the server
     deps: [build]
     cmds:
-      - npx @modelcontextprotocol/inspector ./jev mcp
+      - npx @modelcontextprotocol/inspector ./evaluate mcp
 
   tidy:
     desc: Tidy go.mod

@@ -34,8 +34,11 @@ type evaluateIn struct {
 func registerTools(s *mcp.Server, c *Client) {
 	add(s, &mcp.Tool{
 		Name: "evaluate",
-		Description: "Run a Jev prompt: evaluate state against one or more typed questions (noul, choice, score) " +
-			"and return typed answers with probabilities and confidence.",
+		Description: "Jev is a fast structured-decision model: unstructured state in, typed answers " +
+			"(noul, choice, score) with calibrated confidence out; 70-500ms, schema-enforced. " +
+			"Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
+			"and map-reduce over large data — wherever hand-written logic is too brittle or latency matters. " +
+			"Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options).",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, in evaluateIn) ([]byte, error) {
 		if in.State == nil {

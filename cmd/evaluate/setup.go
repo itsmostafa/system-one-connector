@@ -17,19 +17,19 @@ import (
 // goRunDir matches the temp directory `go run` builds into, deleted on exit.
 var goRunDir = regexp.MustCompile(`/go-build\d+/`)
 
-// jevBinary returns the absolute path clients should be pointed at.
-func jevBinary() (string, error) {
+// evaluateBinary returns the absolute path clients should be pointed at.
+func evaluateBinary() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("finding current executable: %w", err)
 	}
 	if goRunDir.MatchString(exe) {
-		return "", fmt.Errorf("refusing to configure %s: `go run` binaries are deleted on exit; build or install jev first", exe)
+		return "", fmt.Errorf("refusing to configure %s: `go run` binaries are deleted on exit; build or install evaluate first", exe)
 	}
 	return exe, nil
 }
 
-// runMCPSetup registers this binary as the "jev" MCP server with Claude Code
+// runMCPSetup registers this binary as the "evaluate" MCP server with Claude Code
 // and Codex, via their own CLIs, baking in the TYPESAFE_* variables and
 // OPENROUTER_API_KEY from the current environment: clients launch the server
 // without the user's shell env.
@@ -37,7 +37,7 @@ func runMCPSetup(ctx context.Context) error {
 	if _, err := route(); err != nil {
 		return err
 	}
-	exe, err := jevBinary()
+	exe, err := evaluateBinary()
 	if err != nil {
 		return err
 	}
@@ -66,10 +66,16 @@ func runMCPSetup(ctx context.Context) error {
 			fail(c.name, fmt.Errorf("%w\n%s", err, bytes.TrimSpace(out)))
 			if prev != nil {
 				// Not ctx: an interrupted add must still put the old entry back.
-				if err := exec.Command(c.cli, "mcp", "add-json", "jev", string(prev), "-s", "user").Run(); err != nil {
+				if err := exec.Command(c.cli, "mcp", "add-json", "evaluate", string(prev), "-s", "user").Run(); err != nil {
 					errs = append(errs, fmt.Errorf("%s: restoring previous entry: %w", c.name, err))
 				}
 			}
+		} else {
+			// Only now the replacement is registered: rollback restores the
+			// "evaluate" entry, so dropping "jev" before a failed add would
+			// leave a pre-rename install with no server at all. Best effort,
+			// since a missing entry is the normal case.
+			exec.CommandContext(ctx, c.cli, c.legacy...).Run()
 		}
 	}
 
@@ -93,12 +99,12 @@ func runMCPSetup(ctx context.Context) error {
 	}
 	fmt.Println("\n✅ Setup complete!")
 	if desktop {
-		fmt.Println("Restart Claude Desktop to load the jev server.")
+		fmt.Println("Restart Claude Desktop to load the evaluate server.")
 	}
 	return nil
 }
 
-// setupClaudeDesktop sets the jev entry in Claude Desktop's config at path,
+// setupClaudeDesktop sets the evaluate entry in Claude Desktop's config at path,
 // keeping every other key and server intact.
 func setupClaudeDesktop(path, exe string, env []string) error {
 	cfg := map[string]json.RawMessage{}
@@ -137,7 +143,10 @@ func setupClaudeDesktop(path, exe string, env []string) error {
 		}
 		entry.Env[k] = v
 	}
-	if servers["jev"], err = json.Marshal(entry); err != nil {
+	// Same rename cleanup as setupCommand.legacy, for the client with no CLI.
+	// Safe to do before the write: the whole config lands atomically below.
+	delete(servers, "jev")
+	if servers["evaluate"], err = json.Marshal(entry); err != nil {
 		return err
 	}
 	if cfg["mcpServers"], err = json.Marshal(servers); err != nil {
@@ -165,7 +174,7 @@ func setupClaudeDesktop(path, exe string, env []string) error {
 	return os.Rename(tmp.Name(), path)
 }
 
-// claudeUserEntry returns Claude Code's current user-scope jev entry, or nil
+// claudeUserEntry returns Claude Code's current user-scope evaluate entry, or nil
 // if there is none or the config cannot be read.
 func claudeUserEntry() []byte {
 	dir := os.Getenv("CLAUDE_CONFIG_DIR")
@@ -182,7 +191,7 @@ func claudeUserEntry() []byte {
 	if json.Unmarshal(b, &cfg) != nil {
 		return nil
 	}
-	return cfg.MCPServers["jev"]
+	return cfg.MCPServers["evaluate"]
 }
 
 // setupEnv picks the variables to bake into the client configs: every
@@ -199,13 +208,18 @@ func setupEnv(environ []string) []string {
 }
 
 type setupCommand struct {
-	name, cli  string
-	reset, add []string
+	name, cli string
+	// legacy removes the "jev" entry this binary registered before it was
+	// renamed; left behind, it fails to launch a path that no longer exists
+	// every time the client starts. The name is the only signal available —
+	// codex has no config read path — so a server someone else named "jev"
+	// would go too. Acceptable: this tool owned that name.
+	reset, add, legacy []string
 }
 
 func setupCommands(exe string, env []string) []setupCommand {
-	claude := []string{"mcp", "add", "jev", "-s", "user"}
-	codex := []string{"mcp", "add", "jev"}
+	claude := []string{"mcp", "add", "evaluate", "-s", "user"}
+	codex := []string{"mcp", "add", "evaluate"}
 	for _, kv := range env {
 		// One flag per pair: claude's -e is variadic and would swallow the name.
 		claude = append(claude, "-e", kv)
@@ -213,8 +227,8 @@ func setupCommands(exe string, env []string) []setupCommand {
 	}
 	return []setupCommand{
 		// `claude mcp add` refuses an existing name; `codex mcp add` overwrites.
-		{"Claude Code", "claude", []string{"mcp", "remove", "jev", "-s", "user"}, append(claude, "--", exe, "mcp")},
-		{"Codex", "codex", nil, append(codex, "--", exe, "mcp")},
+		{"Claude Code", "claude", []string{"mcp", "remove", "evaluate", "-s", "user"}, append(claude, "--", exe, "mcp"), []string{"mcp", "remove", "jev", "-s", "user"}},
+		{"Codex", "codex", nil, append(codex, "--", exe, "mcp"), []string{"mcp", "remove", "jev"}},
 	}
 }
 
@@ -246,11 +260,11 @@ func piDir() (string, error) {
 	return dir, nil
 }
 
-// runPiSetup installs the jev extension into pi. pi has no MCP client, so the
+// runPiSetup installs the evaluate extension into pi. pi has no MCP client, so the
 // extension registers `evaluate` as a native pi tool and speaks MCP to this
 // binary itself.
 func runPiSetup() error {
-	exe, err := jevBinary()
+	exe, err := evaluateBinary()
 	if err != nil {
 		return err
 	}
@@ -270,7 +284,7 @@ func runPiSetup() error {
 	fmt.Printf("   wrote %s\n", path)
 
 	fmt.Println("\n✅ Setup complete!")
-	fmt.Println("Run /reload in pi, or restart it, to load the jev extension.")
+	fmt.Println("Run /reload in pi, or restart it, to load the evaluate extension.")
 	// Unlike the MCP clients, nothing is baked in: the extension reads the key
 	// from the shell pi runs in, so a missing one is a hint, not a failure.
 	if _, err := route(); err != nil {
@@ -292,14 +306,23 @@ func writePiExtension(dir, exe string) (string, error) {
 		return "", err
 	}
 	src := strings.NewReplacer(
-		"__JEV_BINARY__", string(binary),
-		"__JEV_INSTRUCTIONS__", string(guide),
+		"__EVALUATE_BINARY__", string(binary),
+		"__EVALUATE_INSTRUCTIONS__", string(guide),
 	).Replace(piExtension)
 
 	out := filepath.Join(dir, "extensions")
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return "", err
 	}
-	path := filepath.Join(out, "jev.ts")
-	return path, os.WriteFile(path, []byte(src), 0o600)
+	path := filepath.Join(out, "evaluate.ts")
+	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+		return "", err
+	}
+	// Both files register a tool named `evaluate`, so a leftover jev.ts from
+	// before the rename would collide with the one just written. Removed after
+	// the write, so a failed write leaves pi with the old extension, not none.
+	if err := os.Remove(filepath.Join(out, "jev.ts")); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return path, err
+	}
+	return path, nil
 }

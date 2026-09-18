@@ -1,11 +1,11 @@
 #!/bin/sh
-# Install the latest jev release from GitHub.
+# Install the latest evaluate release from GitHub.
 #   curl -fsSL https://raw.githubusercontent.com/itsmostafa/typesafe-mcp/main/install.sh | sh
-# Override the target directory with JEV_INSTALL_DIR.
+# Override the target directory with EVALUATE_INSTALL_DIR.
 set -eu
 
 REPO="itsmostafa/typesafe-mcp"
-INSTALL_DIR="${JEV_INSTALL_DIR:-$HOME/.local/bin}"
+INSTALL_DIR="${EVALUATE_INSTALL_DIR:-$HOME/.local/bin}"
 
 main() {
 	os=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -20,7 +20,7 @@ main() {
 		exit 1
 	fi
 
-	archive="jev-$os-$arch.tar.gz"
+	archive="evaluate-$os-$arch.tar.gz"
 	base="https://github.com/$REPO/releases/latest/download"
 
 	tmp=$(mktemp -d)
@@ -45,17 +45,17 @@ main() {
 		exit 1
 	fi
 
-	tar -xzf "$tmp/$archive" -C "$tmp" jev
-	chmod +x "$tmp/jev"
+	tar -xzf "$tmp/$archive" -C "$tmp" evaluate
+	chmod +x "$tmp/evaluate"
 	mkdir -p "$INSTALL_DIR"
-	mv "$tmp/jev" "$INSTALL_DIR/jev"
+	mv "$tmp/evaluate" "$INSTALL_DIR/evaluate"
 
-	echo "Installed to $INSTALL_DIR/jev"
+	echo "Installed to $INSTALL_DIR/evaluate"
 	case ":$PATH:" in
 	*":$INSTALL_DIR:"*) ;;
-	*) echo "Add $INSTALL_DIR to your PATH to run jev from anywhere." >&2 ;;
+	*) echo "Add $INSTALL_DIR to your PATH to run evaluate from anywhere." >&2 ;;
 	esac
-	"$INSTALL_DIR/jev" --version
+	"$INSTALL_DIR/evaluate" --version
 }
 
 main "$@"
