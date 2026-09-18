@@ -4,10 +4,6 @@
 // pi has no built-in MCP client, so this extension registers `evaluate` as a
 // native pi tool and talks to the evaluate binary over MCP stdio. The tool schema and
 // the TypeSafe request logic stay in one place: the Go server.
-//
-// ponytail: no automated test for the JSON-RPC client below; this repo is pure Go
-// and tsc would mean a Node dev dependency for one file. `node --check` covers
-// syntax, `pi -e cmd/evaluate/pi.ts` covers behaviour.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { Type } from "typebox"
@@ -20,8 +16,6 @@ const PROTOCOL_VERSION = "2025-06-18"
 
 // callEvaluate runs one `evaluate` tool call against a fresh `evaluate mcp` process and
 // resolves with the raw TypeSafe JSON.
-//
-// ponytail: one evaluate process per call; pool or keep one warm if latency shows up.
 function callEvaluate(args: unknown, signal?: AbortSignal): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     // addEventListener does not replay an abort that already happened, so an
@@ -122,14 +116,16 @@ export default function (pi: ExtensionAPI) {
       "(noul, choice, score) with calibrated confidence out; 70-500ms, schema-enforced. " +
       "Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
       "and map-reduce over large data — wherever hand-written logic is too brittle or latency matters. " +
-      "Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options).",
+      "Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options). " +
+      "Pass raw evidence as state, not your read of it — a conclusion asserted in state biases the answer toward it, and the confidence is then not independent corroboration.",
     promptSnippet:
       "Classify, route, score, extract, or guard with Jev: typed answers and calibrated confidence to branch on, in 70-500ms, instead of parsing prose.",
     // filter: an empty INSTRUCTIONS must not inject a blank guideline.
     promptGuidelines: INSTRUCTIONS.split("\n").filter(Boolean),
     parameters: Type.Object({
       state: Type.Any({
-        description: "content to judge: plain text, or a JSON object/array with named fields",
+        description:
+          "content to judge: plain text, or a JSON object/array with named fields; observed evidence or a faithful condensation of it, not your verdict about it",
       }),
       questions: Type.Object(
         {},
@@ -144,7 +140,7 @@ export default function (pi: ExtensionAPI) {
             }),
             instructions: Type.Any({
               description:
-                "the judgment to make, with its full meaning; a string, or an object/array for definitions, contrasts, and examples",
+                "the judgment to make, with its full meaning; a string, or an object/array for definitions, contrasts, and examples; name the condition to test, not the conclusion you expect",
             }),
             criteria: Type.Optional(
               Type.Any({

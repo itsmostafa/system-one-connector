@@ -29,6 +29,9 @@ const instructions = `The evaluate tool runs Jev, a TypeSafe System One model th
 - Question types: noul (probability a yes/no condition holds), choice (one option from a criteria map), score (probability-weighted position on ordered criteria levels).
 - Ask one narrow judgment per question. Question ids are NOT sent to the model, so instructions must carry the full meaning.
 - Put everything the judgment needs in state; prefer a JSON object with named fields, and reference nested fields with backticked paths like ` + "`ticket.messages[0].text`" + `.
+- State is what you observed — the raw ticket, diff, log, or field values, or a faithful condensation of them. Keep the uncertainty and the counterevidence; leave out your own verdict, which Jev reads as evidence.
+- Write instructions that name the condition to test, not the conclusion you expect. "Does the message report a failed payout?", not "Confirm this urgent payout failure."
+- A conclusion asserted in state biases the answer toward it, and the confidence that comes back is then agreement with yourself, not independent corroboration.
 - Batch independent questions over the same state into one call; they run in parallel and cannot see each other's answers.
 - Include a no-match option in a choice when nothing may fit. Score levels must describe concrete situations.
 - A noul near 0.5 means uncertain, not medium intensity. Confidence measures how concentrated the distribution is, not correctness.
@@ -111,7 +114,6 @@ func route() (*Client, error) {
 		}, nil
 	case os.Getenv("OPENROUTER_API_KEY") != "":
 		return &Client{
-			// ponytail: /api/alpha/ is OpenRouter's alpha path and may move.
 			URL:    "https://openrouter.ai/api/alpha/decisions",
 			APIKey: os.Getenv("OPENROUTER_API_KEY"),
 			Model:  "~typesafe/jev-latest",

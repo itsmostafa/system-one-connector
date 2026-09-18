@@ -1,6 +1,6 @@
 # Typesafe MCP
 
-**Give your AI agent typed evaluations instead of free text.** `evaluate` is an MCP server that lets Claude Code, Claude Desktop, Codex, and [pi](https://pi.dev) call [TypeSafe](https://typesafe.ai)'s Jev model and get back probabilities they can branch on. One command, `evaluate setup mcp`, registers it with the first three (if detected); `evaluate setup pi` covers pi.
+**Give your AI agent typed decisions instead of free text.** `evaluate` is an MCP server that lets Claude Code, Claude Desktop, Codex, and [pi](https://pi.dev) call [TypeSafe](https://typesafe.ai)'s Jev model and get back probabilities they can branch on. One command, `evaluate setup mcp`, registers it with the first three (if detected); `evaluate setup pi` covers pi.
 
 [![Latest release](https://img.shields.io/github/v/release/itsmostafa/typesafe-mcp?sort=semver)](https://github.com/itsmostafa/typesafe-mcp/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -78,7 +78,7 @@ It gets back the raw response JSON, with each answer under the same id you gave 
 - **Answers your code can branch on.** Three question types: `noul` (probability a condition holds), `choice` (one option from a map), `score` (position on ordered levels).
 - **Rate limits handled for you.** 429 and 529 responses are retried with exponential backoff. Other API errors come back to the agent as tool errors it can read and act on.
 - **Several questions, one call.** Batch independent questions over the same state; they run in parallel.
-- **Agents that use it well out of the box.** The server ships usage guidance (narrow questions, JSON state, no-match options) to the client, so the agent writes better questions without extra prompting.
+- **Agents that use it well out of the box.** The server ships usage guidance (narrow questions, JSON state, no-match options, evidence not verdicts) to the client, so the agent writes better questions without extra prompting.
 - **A single static binary.** No runtime, no Node, no Python. `evaluate update` upgrades it in place from a checksum-verified release. Read-only tool, 60s request timeout, response size capped at 16 MiB.
 
 ## About TypeSafe
@@ -89,31 +89,16 @@ It gets back the raw response JSON, with each answer under the same id you gave 
 
 ## Reference
 
-### `evaluate`
-
 | Field | Required | Description |
 |---|---|---|
-| `state` | yes | Content to judge: plain text, or a JSON object/array with named fields |
+| `state` | yes | Content to judge: plain text, or a JSON object/array with named fields. Raw observed evidence, not your conclusion about it |
 | `questions` | yes | Map of question id to `{type, instructions, criteria?}` |
 | `model` | no | Defaults to `jev-latest`, or `~typesafe/jev-latest` on OpenRouter |
 
-Criteria by type: `noul` takes optional `{"true": ..., "false": ...}` descriptions; `choice` requires a map of option to description; `score` requires an ordered array of at least 2 levels. Malformed criteria are rejected locally, before the request, with the field path you sent.
-
-Score answers are **0-indexed**: N levels score `0` to `N-1`. A `3.87` over 5 levels means between levels 3 and 4, not `3.87/5`. The response carries a `legend` mapping each index to your level description, plus a `probabilities` entry per level. Full docs: https://docs.typesafe.ai/api
-
-### Manual client config
-
-Skip `evaluate setup mcp` and point your client at `/absolute/path/to/evaluate mcp` with `TYPESAFE_API_KEY` (or `OPENROUTER_API_KEY`) in its env. Restart Claude Desktop after any config change.
-
-For pi, `evaluate setup pi` writes into `~/.pi/agent/extensions/` (or `$PI_CODING_AGENT_DIR/extensions/`), which pi discovers with no settings change. To install by hand, copy `cmd/evaluate/pi.ts` there as `evaluate.ts` and replace `__EVALUATE_BINARY__` with the quoted absolute path to your `evaluate` binary and `__EVALUATE_INSTRUCTIONS__` with a quoted guidance string.
+Criteria shape per question type, the 0-indexed score answers, and manual client config: [`cmd/evaluate/CLAUDE.md`](cmd/evaluate/CLAUDE.md). Malformed criteria are rejected locally, before the request, with the field path you sent. Full API docs: https://docs.typesafe.ai/api
 
 ## Contributing
 
-Issues and pull requests are welcome. The repo uses [Task](https://taskfile.dev):
-
-```sh
-task check     # gofmt, go vet, and tests with -race
-task inspect   # open the MCP Inspector against a local build
-```
+Issues and pull requests are welcome. The repo uses [Task](https://taskfile.dev): `task check` runs gofmt, `go vet` and the tests with `-race`, and `task inspect` opens the MCP Inspector against a local build. [`CLAUDE.md`](CLAUDE.md) covers the conventions.
 
 If `evaluate` saves you some prompt-parsing, a star helps others find it.
