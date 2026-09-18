@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"os"
 	"path/filepath"
 	"slices"
@@ -259,5 +261,105 @@ func TestPiDir(t *testing.T) {
 	t.Setenv("PI_CODING_AGENT_DIR", "/tmp/pi")
 	if got, err := piDir(); err != nil || got != "/tmp/pi" {
 		t.Errorf("piDir() without HOME = %q, %v, want %q, nil", got, err, "/tmp/pi")
+	}
+}
+
+// Malformed criteria must be caught here, with the path the caller wrote. The
+// API reports this as "questions.<id>.score.criteria" — a union branch, not a
+// property the request ever had.
+func TestValidate(t *testing.T) {
+	obj := map[string]any{"0": "low", "1": "high"}
+	arr := []any{"low", "high"}
+	for _, tc := range []struct {
+		name string
+		q    question
+		want string
+	}{
+		{"score object", question{Type: "score", Criteria: obj}, `questions["q"].criteria: score criteria must be an array of level descriptions, ordered low to high, got an object`},
+		{"score missing", question{Type: "score"}, "got nothing"},
+		{"score string", question{Type: "score", Criteria: "high"}, "got a string"},
+		{"choice array", question{Type: "choice", Criteria: arr}, `questions["q"].criteria: choice criteria must be an object`},
+		{"noul array", question{Type: "noul", Criteria: arr}, `questions["q"].criteria: noul criteria must be an object`},
+
+		{"score array", question{Type: "score", Criteria: arr}, ""},
+		// One level is accepted by the API, so it must not be rejected here.
+		{"score one level", question{Type: "score", Criteria: []any{"only"}}, ""},
+		{"choice object", question{Type: "choice", Criteria: obj}, ""},
+		{"noul object", question{Type: "noul", Criteria: obj}, ""},
+		{"noul omitted", question{Type: "noul"}, ""},
+		// The server enumerates types this tool does not document; rejecting an
+		// unknown type here would break every one of them.
+		{"unknown type", question{Type: "bounding_box", Criteria: obj}, ""},
+	} {
+		tc.q.Instructions = "x"
+		err := validate(evaluateIn{State: "s", Questions: map[string]question{"q": tc.q}})
+		switch {
+		case tc.want == "" && err != nil:
+			t.Errorf("%s: want nil, got %v", tc.name, err)
+		case tc.want != "" && err == nil:
+			t.Errorf("%s: want %q, got nil", tc.name, tc.want)
+		case tc.want != "" && err != nil && !strings.Contains(err.Error(), tc.want):
+			t.Errorf("%s: got %q, want it to contain %q", tc.name, err, tc.want)
+		}
+	}
+}
+
+// TestValidateBlocksRequest drives the registered tool with real JSON arguments,
+// so it covers what TestValidate cannot: that the SDK decodes criteria into the
+// types validate type-switches on, that validate runs *before* the HTTP call,
+// and that a type this tool does not know still reaches the API.
+func TestValidateBlocksRequest(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.Write([]byte(`{"answers":{}}`))
+	}))
+	defer srv.Close()
+
+	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: "test"}, nil)
+	registerTools(s, &Client{URL: srv.URL, APIKey: "k", HTTP: srv.Client(), Model: "m"})
+	ct, st := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	ss, err := s.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "t", Version: "1"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+
+	for _, tc := range []struct {
+		name, criteria, qtype, wantErr string
+		wantCalls                      int
+	}{
+		// The reported bug: an index-keyed object, the shape the response legend
+		// comes back as. It must never reach the API.
+		{"score object", `{"0":"low","1":"high"}`, "score", `questions["q"].criteria`, 0},
+		{"score array", `["low","high"]`, "score", "", 1},
+		// The API accepts one level, so this must not be rejected locally.
+		{"score one level", `["only"]`, "score", "", 1},
+		// The API enumerates types this tool does not document; they pass through.
+		{"unknown type", `{"0":"low"}`, "bounding_box", "", 1},
+	} {
+		calls = 0
+		args := `{"state":"s","questions":{"q":{"type":"` + tc.qtype +
+			`","instructions":"i","criteria":` + tc.criteria + `}}}`
+		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "evaluate", Arguments: json.RawMessage(args)})
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		got := res.Content[0].(*mcp.TextContent).Text
+		if (tc.wantErr != "") != res.IsError {
+			t.Errorf("%s: IsError=%v, got %q", tc.name, res.IsError, got)
+		}
+		if tc.wantErr != "" && !strings.Contains(got, tc.wantErr) {
+			t.Errorf("%s: got %q, want it to contain %q", tc.name, got, tc.wantErr)
+		}
+		if calls != tc.wantCalls {
+			t.Errorf("%s: %d HTTP calls, want %d", tc.name, calls, tc.wantCalls)
+		}
 	}
 }
