@@ -56,13 +56,67 @@ func TestEvaluate(t *testing.T) {
 	}
 }
 
+// The endpoint is taken verbatim, so a route's full URL reaches the server.
+func TestEvaluatePostsToURL(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Path
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+	c := &Client{URL: srv.URL + "/api/alpha/decisions", APIKey: "k", HTTP: srv.Client()}
+	if _, err := c.Evaluate(context.Background(), evaluateIn{State: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if got != "/api/alpha/decisions" {
+		t.Fatalf("path = %q", got)
+	}
+}
+
+func TestRoute(t *testing.T) {
+	for _, tc := range []struct{ typesafe, openrouter, url, model, key string }{
+		{"t", "", "https://api.typesafe.ai/v1/systemone", "jev-latest", "t"},
+		{"", "o", "https://openrouter.ai/api/alpha/decisions", "~typesafe/jev-latest", "o"},
+		// TypeSafe wins so a stray OpenRouter key cannot reroute an existing setup.
+		{"t", "o", "https://api.typesafe.ai/v1/systemone", "jev-latest", "t"},
+	} {
+		t.Setenv("TYPESAFE_API_KEY", tc.typesafe)
+		t.Setenv("OPENROUTER_API_KEY", tc.openrouter)
+		c, err := route()
+		if err != nil {
+			t.Fatalf("%+v: %v", tc, err)
+		}
+		// APIKey too: each route must send the key that selected it.
+		if c.URL != tc.url || c.Model != tc.model || c.APIKey != tc.key {
+			t.Errorf("%+v: got %s %s %s", tc, c.URL, c.Model, c.APIKey)
+		}
+	}
+
+	t.Setenv("TYPESAFE_API_KEY", "")
+	t.Setenv("OPENROUTER_API_KEY", "")
+	if _, err := route(); err == nil {
+		t.Fatal("no keys: want error")
+	}
+}
+
+func TestSetupEnv(t *testing.T) {
+	got := setupEnv([]string{
+		"PATH=/bin", "TYPESAFE_API_KEY=k", "OPENROUTER_API_KEY_OTHER=no",
+		"TYPESAFE_OTHER=s", "OPENROUTER_BASE_URL=no", "OPENROUTER_API_KEY=o=o",
+	})
+	want := []string{"TYPESAFE_API_KEY=k", "TYPESAFE_OTHER=s", "OPENROUTER_API_KEY=o=o"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("got %q\nwant %q", got, want)
+	}
+}
+
 func TestSetupCommands(t *testing.T) {
-	cmds := setupCommands("/bin/jev", []string{"TYPESAFE_API_KEY=k", "TYPESAFE_OTHER=s"})
+	cmds := setupCommands("/bin/jev", []string{"TYPESAFE_API_KEY=k", "OPENROUTER_API_KEY=o"})
 	want := [][]string{
 		{"mcp", "remove", "jev", "-s", "user"},
-		{"mcp", "add", "jev", "-s", "user", "-e", "TYPESAFE_API_KEY=k", "-e", "TYPESAFE_OTHER=s", "--", "/bin/jev", "mcp"},
+		{"mcp", "add", "jev", "-s", "user", "-e", "TYPESAFE_API_KEY=k", "-e", "OPENROUTER_API_KEY=o", "--", "/bin/jev", "mcp"},
 		nil,
-		{"mcp", "add", "jev", "--env", "TYPESAFE_API_KEY=k", "--env", "TYPESAFE_OTHER=s", "--", "/bin/jev", "mcp"},
+		{"mcp", "add", "jev", "--env", "TYPESAFE_API_KEY=k", "--env", "OPENROUTER_API_KEY=o", "--", "/bin/jev", "mcp"},
 	}
 	got := [][]string{cmds[0].reset, cmds[0].add, cmds[1].reset, cmds[1].add}
 	if !slices.EqualFunc(got, want, slices.Equal) {
