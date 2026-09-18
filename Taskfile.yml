@@ -12,6 +12,7 @@ tasks:
       - go build -o jev ./cmd/jev
     sources:
       - cmd/**/*.go
+      - cmd/**/*.ts
       - go.mod
       - go.sum
     generates:

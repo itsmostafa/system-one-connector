@@ -226,6 +226,11 @@ var piExtension string
 // override silently miss an existing install.
 func piDir() (string, error) {
 	dir := os.Getenv("PI_CODING_AGENT_DIR")
+	// Only the tilde and default cases need a home directory; an explicit path
+	// has to keep working where HOME is unset.
+	if dir != "" && !strings.HasPrefix(dir, "~") {
+		return dir, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err

@@ -235,4 +235,11 @@ func TestPiDir(t *testing.T) {
 			t.Errorf("piDir() with %q = %q, want %q", tc.env, got, tc.want)
 		}
 	}
+	// An absolute override must not need a home directory: sanitized
+	// environments (env -i PI_CODING_AGENT_DIR=...) have none.
+	t.Setenv("HOME", "")
+	t.Setenv("PI_CODING_AGENT_DIR", "/tmp/pi")
+	if got, err := piDir(); err != nil || got != "/tmp/pi" {
+		t.Errorf("piDir() without HOME = %q, %v, want %q, nil", got, err, "/tmp/pi")
+	}
 }
