@@ -94,8 +94,6 @@ func runUpdate(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("fetching latest release: %w", err)
 	}
-	// ponytail: equality, not semver; a local build newer than the latest
-	// release gets replaced by it. Compare versions if that starts to bite.
 	if version == release.TagName {
 		fmt.Printf("Already up to date (%s).\n", version)
 		return nil
