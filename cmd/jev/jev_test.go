@@ -41,7 +41,7 @@ func TestEvaluate(t *testing.T) {
 		w.Write([]byte(`{"model":"` + in.Model + `","answers":{"q":{"type":"noul","noul":0.9}}}`))
 	}))
 	defer srv.Close()
-	c := &Client{BaseURL: srv.URL, APIKey: "k", HTTP: srv.Client()}
+	c := &Client{URL: srv.URL + "/v1/systemone", APIKey: "k", HTTP: srv.Client()}
 	req := evaluateIn{Model: "jev-latest", Questions: map[string]question{"q": {Type: "noul", Instructions: "urgent?"}}}
 
 	req.State = "busy"
