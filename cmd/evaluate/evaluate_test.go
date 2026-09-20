@@ -59,6 +59,30 @@ func TestEvaluate(t *testing.T) {
 	}
 }
 
+// A reply that fills the 16 MiB cap exactly is still a whole answer; one byte
+// more is a body that was cut mid-JSON, and returning that as a success handed
+// the caller truncated JSON with no error.
+func TestEvaluateBodyLimit(t *testing.T) {
+	size := maxBody
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		pad := size - len(`{"answers":{"q":""}}`)
+		w.Write([]byte(`{"answers":{"q":"` + strings.Repeat("x", pad) + `"}}`))
+	}))
+	defer srv.Close()
+	c := &Client{URL: srv.URL, APIKey: "k", HTTP: srv.Client()}
+
+	b, err := c.Evaluate(context.Background(), evaluateIn{State: "s"})
+	if err != nil || len(b) != maxBody || !json.Valid(b) {
+		t.Fatalf("at limit: len=%d valid=%v err=%v", len(b), json.Valid(b), err)
+	}
+
+	size = maxBody + 1
+	b, err = c.Evaluate(context.Background(), evaluateIn{State: "s"})
+	if err == nil || !strings.Contains(err.Error(), "response exceeds") {
+		t.Fatalf("over limit: len=%d err=%v", len(b), err)
+	}
+}
+
 // The endpoint is taken verbatim, so a route's full URL reaches the server.
 func TestEvaluatePostsToURL(t *testing.T) {
 	var got string
