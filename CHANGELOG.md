@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.2](https://github.com/itsmostafa/typesafe-mcp/compare/v0.4.1...v0.4.2) (2026-09-20)
+
+
+### Bug Fixes
+
+* **client:** reject oversized responses instead of truncating them ([7565a80](https://github.com/itsmostafa/typesafe-mcp/commit/7565a80bf1e8b4778acb4f622ae187f09b0d0246))
+* **setup:** stop removing MCP servers named jev ([01d7d1d](https://github.com/itsmostafa/typesafe-mcp/commit/01d7d1d87d904dbf482926fa5f843f47a2827857)), closes [#14](https://github.com/itsmostafa/typesafe-mcp/issues/14)
+* stop removing MCP servers named jev ([3a98e16](https://github.com/itsmostafa/typesafe-mcp/commit/3a98e16726e8dca63eae338d3aa04655700c27ab))
+* stop silently altering evidence in and out of the evaluate tool ([d700fde](https://github.com/itsmostafa/typesafe-mcp/commit/d700fde14b1c52892f21cc7644eb420cc6e81ea3))
+* **tools:** forward numbers as written instead of rounding past 2^53 ([b5aefe4](https://github.com/itsmostafa/typesafe-mcp/commit/b5aefe437d2ffdff2a22aca2b3a99081fb3e1dd2))
+
 ## [0.4.1](https://github.com/itsmostafa/typesafe-mcp/compare/v0.4.0...v0.4.1) (2026-09-18)
 
 
