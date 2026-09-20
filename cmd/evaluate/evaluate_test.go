@@ -59,6 +59,30 @@ func TestEvaluate(t *testing.T) {
 	}
 }
 
+// A reply that fills the 16 MiB cap exactly is still a whole answer; one byte
+// more is a body that was cut mid-JSON, and returning that as a success handed
+// the caller truncated JSON with no error.
+func TestEvaluateBodyLimit(t *testing.T) {
+	size := maxBody
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		pad := size - len(`{"answers":{"q":""}}`)
+		w.Write([]byte(`{"answers":{"q":"` + strings.Repeat("x", pad) + `"}}`))
+	}))
+	defer srv.Close()
+	c := &Client{URL: srv.URL, APIKey: "k", HTTP: srv.Client()}
+
+	b, err := c.Evaluate(context.Background(), evaluateIn{State: "s"})
+	if err != nil || len(b) != maxBody || !json.Valid(b) {
+		t.Fatalf("at limit: len=%d valid=%v err=%v", len(b), json.Valid(b), err)
+	}
+
+	size = maxBody + 1
+	b, err = c.Evaluate(context.Background(), evaluateIn{State: "s"})
+	if err == nil || !strings.Contains(err.Error(), "response exceeds") {
+		t.Fatalf("over limit: len=%d err=%v", len(b), err)
+	}
+}
+
 // The endpoint is taken verbatim, so a route's full URL reaches the server.
 func TestEvaluatePostsToURL(t *testing.T) {
 	var got string
@@ -300,6 +324,55 @@ func TestValidate(t *testing.T) {
 			t.Errorf("%s: want %q, got nil", tc.name, tc.want)
 		case tc.want != "" && err != nil && !strings.Contains(err.Error(), tc.want):
 			t.Errorf("%s: got %q, want it to contain %q", tc.name, err, tc.want)
+		}
+	}
+}
+
+// State is evidence, so it must reach the model as the caller wrote it. Decoded
+// into `any` the plain way, a JSON number becomes a float64, and anything past
+// 2^53 rounds — collapsing two distinct ids into one before the model ever sees
+// them. This drives the tool end to end and reads the body that goes out.
+func TestBigNumbersSurviveForwarding(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		got = string(b)
+		w.Write([]byte(`{"answers":{}}`))
+	}))
+	defer srv.Close()
+
+	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: "test"}, nil)
+	registerTools(s, &Client{URL: srv.URL, APIKey: "k", HTTP: srv.Client(), Model: "m"})
+	ct, st := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	ss, err := s.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "t", Version: "1"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+
+	args := `{"state":{"a":9007199254740993,"b":9007199254740992,"c":1.50,"d":-0.1},` +
+		`"questions":{"q":{"type":"noul","instructions":"i"}}}`
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "evaluate", Arguments: json.RawMessage(args)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+	for _, want := range []string{
+		`"a":9007199254740993`, // not rounded down to ...992
+		`"b":9007199254740992`, // and still distinct from a
+		`"c":1.50`,             // fractions keep the caller's digits too
+		`"d":-0.1`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("outgoing body missing %s: %s", want, got)
 		}
 	}
 }

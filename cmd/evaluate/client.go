@@ -43,10 +43,16 @@ func (c *Client) Evaluate(ctx context.Context, req any) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		b, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+		// maxBody+1 so a body that fills the cap exactly is told apart from one
+		// that overruns it; without that, an overlong reply came back truncated
+		// mid-JSON and, on a 2xx, was returned as a successful answer.
+		b, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 		resp.Body.Close()
 		if err != nil {
 			return nil, err
+		}
+		if len(b) > maxBody {
+			return nil, fmt.Errorf("evaluate: %s: response exceeds %d bytes", resp.Status, maxBody)
 		}
 		if resp.StatusCode/100 == 2 {
 			return b, nil

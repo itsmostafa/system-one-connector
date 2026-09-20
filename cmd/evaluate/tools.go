@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -10,8 +12,21 @@ import (
 
 // add registers a tool whose handler returns raw text (usually TypeSafe JSON).
 // A returned error becomes a tool result with IsError set.
+//
+// The SDK's own decode of the arguments is discarded: it lands JSON numbers in
+// `any` fields as float64, which silently rounds anything past 2^53, so two
+// distinct ids in state would reach the model as one number. Re-decoding with
+// UseNumber keeps every number as the digits the caller wrote, and re-marshals
+// them verbatim. The SDK has already validated the arguments against the input
+// schema by this point, so this only changes how they are read.
 func add[In any](s *mcp.Server, t *mcp.Tool, fn func(ctx context.Context, in In) ([]byte, error)) {
-	mcp.AddTool(s, t, func(ctx context.Context, _ *mcp.CallToolRequest, in In) (*mcp.CallToolResult, any, error) {
+	mcp.AddTool(s, t, func(ctx context.Context, req *mcp.CallToolRequest, _ In) (*mcp.CallToolResult, any, error) {
+		var in In
+		d := json.NewDecoder(bytes.NewReader(req.Params.Arguments))
+		d.UseNumber()
+		if err := d.Decode(&in); err != nil {
+			return nil, nil, err
+		}
 		b, err := fn(ctx, in)
 		if err != nil {
 			return nil, nil, err
@@ -119,7 +134,7 @@ func jsonKind(v any) string {
 		return "an object"
 	case string:
 		return "a string"
-	case float64:
+	case json.Number, float64:
 		return "a number"
 	case bool:
 		return "a boolean"

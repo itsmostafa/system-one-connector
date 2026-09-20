@@ -79,7 +79,7 @@ It gets back the raw response JSON, with each answer under the same id you gave 
 - **Rate limits handled for you.** 429 and 529 responses are retried with exponential backoff. Other API errors come back to the agent as tool errors it can read and act on.
 - **Several questions, one call.** Batch independent questions over the same state; they run in parallel.
 - **Agents that use it well out of the box.** The server ships usage guidance (narrow questions, JSON state, no-match options, evidence not verdicts) to the client, so the agent writes better questions without extra prompting.
-- **A single static binary.** No runtime, no Node, no Python. `evaluate update` upgrades it in place from a checksum-verified release. Read-only tool, 60s request timeout, response size capped at 16 MiB.
+- **A single static binary.** No runtime, no Node, no Python. `evaluate update` upgrades it in place from a checksum-verified release. Read-only tool, 60s request timeout, responses over 16 MiB are rejected, never truncated.
 
 ## About TypeSafe
 

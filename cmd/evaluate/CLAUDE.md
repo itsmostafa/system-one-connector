@@ -5,7 +5,7 @@ Tests all sit in `evaluate_test.go`, table-driven over `httptest`.
 | File | Holds |
 |---|---|
 | `main.go` | cobra command tree, `route` (endpoint from env), the `instructions` const |
-| `client.go` | POSTs the request; retries 429/529 with backoff up to 3 times, 16 MiB body cap |
+| `client.go` | POSTs the request; retries 429/529 with backoff up to 3 times; rejects a body over the 16 MiB cap rather than truncating it |
 | `tools.go` | the `evaluate` tool: input schema in `jsonschema` struct tags, plus `validate` |
 | `setup.go` | registration for Claude Code/Desktop, Codex and pi; renders `pi.ts` |
 | `update.go` | self-update from a checksum-verified GitHub release |
@@ -17,6 +17,7 @@ Tests all sit in `evaluate_test.go`, table-driven over `httptest`.
 - Every line of `instructions` is one guideline: `pi.ts` splits the const on newlines, so a bullet wrapped across two physical lines ships as two broken guidelines.
 - Stdout of `evaluate mcp` carries the MCP protocol; diagnostics go to stderr.
 - `route` prefers `TYPESAFE_API_KEY` over `OPENROUTER_API_KEY`, so a stray OpenRouter key cannot re-bill an existing setup. An explicit `model` passes through unmapped, whichever route is live.
+- `add` in `tools.go` re-decodes the raw arguments with `UseNumber`, so numbers in the `any` fields (`state`, `instructions`, `criteria`) forward as written instead of rounding past 2^53. That means they arrive as `json.Number`, not `float64` — `jsonKind` matches both.
 - `validate` rejects only the criteria shapes the API definitely refuses; unknown question types pass through, because the API enumerates more of them than this tool documents.
 - `pi.ts` must stay valid TypeScript once `__EVALUATE_BINARY__` and `__EVALUATE_INSTRUCTIONS__` are replaced with JSON-marshaled strings. `node --check` covers syntax and `pi -e cmd/evaluate/pi.ts` covers behaviour; there is no tsc and no Node dev dependency.
 
