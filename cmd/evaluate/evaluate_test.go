@@ -108,6 +108,7 @@ func TestRoute(t *testing.T) {
 	} {
 		t.Setenv("TYPESAFE_API_KEY", tc.typesafe)
 		t.Setenv("OPENROUTER_API_KEY", tc.openrouter)
+		t.Setenv("TYPESAFE_BASE_URL", "")
 		c, err := route()
 		if err != nil {
 			t.Fatalf("%+v: %v", tc, err)
@@ -118,8 +119,37 @@ func TestRoute(t *testing.T) {
 		}
 	}
 
+	// TYPESAFE_BASE_URL retargets the TypeSafe route, with or without a trailing
+	// slash, and leaves OpenRouter alone.
+	t.Setenv("TYPESAFE_API_KEY", "t")
+	t.Setenv("OPENROUTER_API_KEY", "")
+	for _, tc := range []struct{ base, url string }{
+		{"https://jev.internal", "https://jev.internal/v1/systemone"},
+		{"https://jev.internal/", "https://jev.internal/v1/systemone"},
+	} {
+		t.Setenv("TYPESAFE_BASE_URL", tc.base)
+		c, err := route()
+		if err != nil {
+			t.Fatalf("%s: %v", tc.base, err)
+		}
+		if c.URL != tc.url {
+			t.Errorf("base %q: got %s, want %s", tc.base, c.URL, tc.url)
+		}
+	}
+	t.Setenv("TYPESAFE_API_KEY", "")
+	t.Setenv("OPENROUTER_API_KEY", "o")
+	t.Setenv("TYPESAFE_BASE_URL", "https://jev.internal")
+	c, err := route()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.URL != "https://openrouter.ai/api/alpha/decisions" {
+		t.Errorf("base url leaked into OpenRouter route: %s", c.URL)
+	}
+
 	t.Setenv("TYPESAFE_API_KEY", "")
 	t.Setenv("OPENROUTER_API_KEY", "")
+	t.Setenv("TYPESAFE_BASE_URL", "")
 	if _, err := route(); err == nil {
 		t.Fatal("no keys: want error")
 	}
