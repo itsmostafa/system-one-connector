@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.3](https://github.com/itsmostafa/typesafe-mcp/compare/v0.4.2...v0.4.3) (2026-09-21)
+
+
+### Features
+
+* **cli:** allow TYPESAFE_BASE_URL to retarget the TypeSafe route ([e701eb8](https://github.com/itsmostafa/typesafe-mcp/commit/e701eb88307f0ee33b2d02ea92cd00bfe9f4ae4f))
+* **cli:** allow TYPESAFE_BASE_URL to retarget the TypeSafe route ([c170074](https://github.com/itsmostafa/typesafe-mcp/commit/c170074a7c7c8499e46d839f657e8495e33faf26))
+* **cli:** allow TYPESAFE_BASE_URL to retarget the TypeSafe route ([8ca57c9](https://github.com/itsmostafa/typesafe-mcp/commit/8ca57c974b3a349198d7b5cf54141c44e7b3a14a))
+
+
+### Bug Fixes
+
+* **cli:** validate TYPESAFE_BASE_URL before it reaches client configs ([0a1a200](https://github.com/itsmostafa/typesafe-mcp/commit/0a1a200b81140122657d750cb52f24833b3a1bac))
+
+
+### Miscellaneous Chores
+
+* release 0.4.3 ([b82458c](https://github.com/itsmostafa/typesafe-mcp/commit/b82458c89f69130de2e01af4761de603bdd406d5))
+
 ## [0.4.2](https://github.com/itsmostafa/typesafe-mcp/compare/v0.4.1...v0.4.2) (2026-09-20)
 
 
