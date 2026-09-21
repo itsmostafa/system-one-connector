@@ -45,7 +45,7 @@ OPENROUTER_API_KEY=your-key evaluate setup mcp
 
 `TYPESAFE_API_KEY` wins if both are set. OpenRouter's Decisions endpoint is still on its `/api/alpha/` path and may move.
 
-Point the TypeSafe route at another host (a proxy or a self-hosted gateway) with `TYPESAFE_BASE_URL`; the base is host-level, `/v1/systemone` is appended, and the default is `https://api.typesafe.ai`. It has no effect on the OpenRouter route:
+Point the TypeSafe route at another host (a proxy or a self-hosted gateway) with `TYPESAFE_BASE_URL`; the base is host-level, `/v1/systemone` is appended, and the default is `https://api.typesafe.ai`. It must be an absolute `http(s)` URL and has no effect on the OpenRouter route:
 
 ```sh
 TYPESAFE_API_KEY=your-key TYPESAFE_BASE_URL=https://jev.internal evaluate setup mcp

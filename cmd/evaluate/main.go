@@ -2,14 +2,15 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"runtime/debug"
-	"strings"
 	"syscall"
 	"time"
 
@@ -103,20 +104,26 @@ func newRootCmd() *cobra.Command {
 
 // route picks the evaluation endpoint from the environment: the TypeSafe API
 // when TYPESAFE_API_KEY is set, otherwise OpenRouter's Decisions router.
-// TYPESAFE_BASE_URL overrides the TypeSafe host (default https://api.typesafe.ai);
-// the API version and path are appended by us, so the base stays host-level and
-// a future v2 is a code change, not a config migration. TypeSafe wins when both
-// keys are set, so an OPENROUTER_API_KEY left in the shell by another tool cannot
-// silently reroute and re-bill an existing setup.
+// TypeSafe wins when both are set, so an OPENROUTER_API_KEY left in the shell
+// by another tool cannot silently reroute and re-bill an existing setup.
+// TYPESAFE_BASE_URL is validated here rather than in setup because route is the
+// only place a *Client is built, so a hand-written client config cannot smuggle
+// a dead endpoint past it either.
 func route() (*Client, error) {
 	switch {
 	case os.Getenv("TYPESAFE_API_KEY") != "":
-		base := os.Getenv("TYPESAFE_BASE_URL")
-		if base == "" {
-			base = "https://api.typesafe.ai"
+		base := cmp.Or(os.Getenv("TYPESAFE_BASE_URL"), "https://api.typesafe.ai")
+		u, err := url.Parse(base)
+		if err != nil {
+			return nil, fmt.Errorf("TYPESAFE_BASE_URL: %w", err)
+		}
+		// Parse accepts a bare host as a relative URL, so the scheme and host
+		// carry the check.
+		if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return nil, fmt.Errorf("TYPESAFE_BASE_URL must be an absolute http(s) URL, got %q", base)
 		}
 		return &Client{
-			URL:    strings.TrimSuffix(base, "/") + "/v1/systemone",
+			URL:    u.JoinPath("v1", "systemone").String(),
 			APIKey: os.Getenv("TYPESAFE_API_KEY"),
 			Model:  "jev-latest",
 		}, nil
