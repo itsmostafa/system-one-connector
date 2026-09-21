@@ -17,6 +17,7 @@ Tests all sit in `evaluate_test.go`, table-driven over `httptest`.
 - Every line of `instructions` is one guideline: `pi.ts` splits the const on newlines, so a bullet wrapped across two physical lines ships as two broken guidelines.
 - Stdout of `evaluate mcp` carries the MCP protocol; diagnostics go to stderr.
 - `route` prefers `TYPESAFE_API_KEY` over `OPENROUTER_API_KEY`, so a stray OpenRouter key cannot re-bill an existing setup. An explicit `model` passes through unmapped, whichever route is live.
+- `TYPESAFE_BASE_URL` overrides the TypeSafe host (default `https://api.typesafe.ai`); `/v1/systemone` is appended, so the base is host-level and a trailing slash is tolerated. It does not touch the OpenRouter route. `setupEnv` already carries every `TYPESAFE_*` variable into the client configs, so a new one needs no setup change.
 - `add` in `tools.go` re-decodes the raw arguments with `UseNumber`, so numbers in the `any` fields (`state`, `instructions`, `criteria`) forward as written instead of rounding past 2^53. That means they arrive as `json.Number`, not `float64` — `jsonKind` matches both.
 - `validate` rejects only the criteria shapes the API definitely refuses; unknown question types pass through, because the API enumerates more of them than this tool documents.
 - `pi.ts` must stay valid TypeScript once `__EVALUATE_BINARY__` and `__EVALUATE_INSTRUCTIONS__` are replaced with JSON-marshaled strings. `node --check` covers syntax and `pi -e cmd/evaluate/pi.ts` covers behaviour; there is no tsc and no Node dev dependency.
@@ -35,4 +36,4 @@ Score answers are 0-indexed: N levels score `0` to `N-1`, so `3.87` over 5 level
 
 ## Manual client config
 
-Point any MCP client at `/absolute/path/to/evaluate mcp` with `TYPESAFE_API_KEY` (or `OPENROUTER_API_KEY`) in its env; restart Claude Desktop after a config change. For pi by hand, copy `pi.ts` to `~/.pi/agent/extensions/evaluate.ts` (or `$PI_CODING_AGENT_DIR/extensions/`) and replace `__EVALUATE_BINARY__` with the quoted absolute path to the binary and `__EVALUATE_INSTRUCTIONS__` with a quoted guidance string.
+Point any MCP client at `/absolute/path/to/evaluate mcp` with `TYPESAFE_API_KEY` (or `OPENROUTER_API_KEY`) in its env; add `TYPESAFE_BASE_URL` to retarget the TypeSafe route. Restart Claude Desktop after a config change. For pi by hand, copy `pi.ts` to `~/.pi/agent/extensions/evaluate.ts` (or `$PI_CODING_AGENT_DIR/extensions/`) and replace `__EVALUATE_BINARY__` with the quoted absolute path to the binary and `__EVALUATE_INSTRUCTIONS__` with a quoted guidance string.

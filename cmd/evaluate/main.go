@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"strings"
 	"syscall"
 	"time"
 
@@ -102,13 +103,20 @@ func newRootCmd() *cobra.Command {
 
 // route picks the evaluation endpoint from the environment: the TypeSafe API
 // when TYPESAFE_API_KEY is set, otherwise OpenRouter's Decisions router.
-// TypeSafe wins when both are set, so an OPENROUTER_API_KEY left in the shell
-// by another tool cannot silently reroute and re-bill an existing setup.
+// TYPESAFE_BASE_URL overrides the TypeSafe host (default https://api.typesafe.ai);
+// the API version and path are appended by us, so the base stays host-level and
+// a future v2 is a code change, not a config migration. TypeSafe wins when both
+// keys are set, so an OPENROUTER_API_KEY left in the shell by another tool cannot
+// silently reroute and re-bill an existing setup.
 func route() (*Client, error) {
 	switch {
 	case os.Getenv("TYPESAFE_API_KEY") != "":
+		base := os.Getenv("TYPESAFE_BASE_URL")
+		if base == "" {
+			base = "https://api.typesafe.ai"
+		}
 		return &Client{
-			URL:    "https://api.typesafe.ai/v1/systemone",
+			URL:    strings.TrimSuffix(base, "/") + "/v1/systemone",
 			APIKey: os.Getenv("TYPESAFE_API_KEY"),
 			Model:  "jev-latest",
 		}, nil
