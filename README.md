@@ -76,16 +76,16 @@ The agent calls `evaluate` with:
 }
 ```
 
-It gets back the raw response JSON, with each answer under the same id you gave it.
+It gets back the raw response JSON, with each answer under the same id you gave it, passed through exactly as the API sent it.
 
 ## What you get
 
 - **One-command setup across clients.** `evaluate setup mcp` registers with Claude Code (user scope) and Codex when their CLIs are on `PATH`, and with Claude Desktop when it is installed. Every `TYPESAFE_*` variable in your shell is carried over, plus `OPENROUTER_API_KEY`. Re-run it to update. `evaluate setup pi` installs the pi extension.
-- **Answers your code can branch on.** Three question types: `noul` (probability a condition holds), `choice` (one option from a map), `score` (position on ordered levels).
+- **Three typed question types.** `noul` (probability a condition holds), `choice` (one option from a map), `score` (position on ordered levels) — Jev answers with a typed value, and for `choice` and `score` the full probability distribution behind it, not prose to parse.
 - **Rate limits handled for you.** 429 and 529 responses are retried with exponential backoff. Other API errors come back to the agent as tool errors it can read and act on.
 - **Several questions, one call.** Batch independent questions over the same state; they run in parallel.
 - **Agents that use it well out of the box.** The server ships usage guidance (narrow questions, JSON state, no-match options, evidence not verdicts) to the client, so the agent writes better questions without extra prompting.
-- **A single static binary.** No runtime, no Node, no Python. `evaluate update` upgrades it in place from a checksum-verified release. Read-only tool, 60s request timeout, responses over 16 MiB are rejected, never truncated.
+- **A single static binary.** No runtime, no Node, no Python. `evaluate update` upgrades it in place from a checksum-verified release. Read-only tool, 60s request timeout, responses over 16 MiB are rejected, never truncated. A 2xx body is returned unchanged and unvalidated — no envelope check, no per-question coverage check — so checking an answer came back for every question you asked, and that it matches the [documented contract](https://docs.typesafe.ai/api), is the caller's job.
 
 ## About TypeSafe
 
