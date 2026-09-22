@@ -556,6 +556,36 @@ func TestItems(t *testing.T) {
 	}
 }
 
+// The per-request cap bounds one reply, not a batch: without an aggregate cap
+// two replies just under it would both be kept, and 100 would hold gigabytes.
+func TestItemsAggregateCap(t *testing.T) {
+	big := `{"answers":{"q":"` + strings.Repeat("x", maxBody*2/3) + `"}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(big))
+	}))
+	defer srv.Close()
+	text, isErr := connectEvaluate(t, srv)(`{"questions":{"q":{"type":"noul","instructions":"i"}},` +
+		`"items":{"a":{"x":1},"b":{"x":2}}}`)
+	if isErr {
+		t.Fatalf("tool error: %.200s", text)
+	}
+	var out struct {
+		Results map[string]json.RawMessage
+		Errors  map[string]string
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Results) != 1 || len(out.Errors) != 1 {
+		t.Fatalf("got %d results and %d errors, want one of each", len(out.Results), len(out.Errors))
+	}
+	for _, msg := range out.Errors {
+		if !strings.Contains(msg, "batch responses exceed") {
+			t.Errorf("error = %q", msg)
+		}
+	}
+}
+
 // connectEvaluate registers the evaluate tool against srv and connects an MCP
 // client to it in memory, returning a call that yields the tool's text and
 // whether it was an error result.

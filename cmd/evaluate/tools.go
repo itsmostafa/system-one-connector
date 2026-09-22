@@ -107,12 +107,16 @@ func registerTools(s *mcp.Server, c *Client) {
 // is judged with another in view; one combined state would both couple them and
 // dilute each judgment with the others' content. A failed item lands in errors
 // without cancelling its siblings, and only a total failure is a tool error.
+// maxBody bounds the whole batch, not just each reply: every stored result and
+// error counts against it, so 100 replies near the per-request cap cannot pile
+// up gigabytes. Once it is spent, later items keep only a short error.
 func evaluateItems(ctx context.Context, c *Client, in evaluateIn) ([]byte, error) {
 	var (
-		mu  sync.Mutex
-		wg  sync.WaitGroup
-		sem = make(chan struct{}, itemConcurrency)
-		out = struct {
+		mu   sync.Mutex
+		wg   sync.WaitGroup
+		size int
+		sem  = make(chan struct{}, itemConcurrency)
+		out  = struct {
 			Results map[string]json.RawMessage `json:"results"`
 			Errors  map[string]string          `json:"errors,omitempty"`
 		}{Results: map[string]json.RawMessage{}, Errors: map[string]string{}}
@@ -128,10 +132,20 @@ func evaluateItems(ctx context.Context, c *Client, in evaluateIn) ([]byte, error
 			b, err := c.Evaluate(ctx, request{state, in.Questions, in.Model})
 			mu.Lock()
 			defer mu.Unlock()
+			n := len(b)
 			if err != nil {
+				n = len(err.Error())
+			}
+			switch {
+			case size+n > maxBody:
+				out.Errors[id] = fmt.Sprintf("evaluate: dropped: batch responses exceed %d bytes; split items across calls", maxBody)
+			case err != nil:
 				out.Errors[id] = err.Error()
-			} else {
+			default:
 				out.Results[id] = b
+			}
+			if size+n <= maxBody {
+				size += n
 			}
 		})
 	}
