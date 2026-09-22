@@ -366,29 +366,12 @@ func TestBigNumbersSurviveForwarding(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: "test"}, nil)
-	registerTools(s, &Client{URL: srv.URL, APIKey: "k", HTTP: srv.Client(), Model: "m"})
-	ct, st := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	ss, err := s.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ss.Close()
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "t", Version: "1"}, nil).Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cs.Close()
+	call := connectEvaluate(t, srv)
 
 	args := `{"state":{"a":9007199254740993,"b":9007199254740992,"c":1.50,"d":-0.1},` +
 		`"questions":{"q":{"type":"noul","instructions":"i"}}}`
-	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "evaluate", Arguments: json.RawMessage(args)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.IsError {
-		t.Fatalf("tool error: %s", res.Content[0].(*mcp.TextContent).Text)
+	if text, isErr := call(args); isErr {
+		t.Fatalf("tool error: %s", text)
 	}
 	for _, want := range []string{
 		`"a":9007199254740993`, // not rounded down to ...992
@@ -413,20 +396,7 @@ func TestValidateBlocksRequest(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: "test"}, nil)
-	registerTools(s, &Client{URL: srv.URL, APIKey: "k", HTTP: srv.Client(), Model: "m"})
-	ct, st := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	ss, err := s.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ss.Close()
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "t", Version: "1"}, nil).Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cs.Close()
+	call := connectEvaluate(t, srv)
 
 	for _, tc := range []struct {
 		name, criteria, qtype, wantErr string
@@ -443,13 +413,9 @@ func TestValidateBlocksRequest(t *testing.T) {
 		calls = 0
 		args := `{"state":"s","questions":{"q":{"type":"` + tc.qtype +
 			`","instructions":"i","criteria":` + tc.criteria + `}}}`
-		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "evaluate", Arguments: json.RawMessage(args)})
-		if err != nil {
-			t.Fatalf("%s: %v", tc.name, err)
-		}
-		got := res.Content[0].(*mcp.TextContent).Text
-		if (tc.wantErr != "") != res.IsError {
-			t.Errorf("%s: IsError=%v, got %q", tc.name, res.IsError, got)
+		got, isErr := call(args)
+		if (tc.wantErr != "") != isErr {
+			t.Errorf("%s: IsError=%v, got %q", tc.name, isErr, got)
 		}
 		if tc.wantErr != "" && !strings.Contains(got, tc.wantErr) {
 			t.Errorf("%s: got %q, want it to contain %q", tc.name, got, tc.wantErr)
@@ -495,29 +461,8 @@ func TestItems(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: "test"}, nil)
-	registerTools(s, &Client{URL: srv.URL, APIKey: "k", HTTP: srv.Client(), Model: "m"})
-	ct, st := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	ss, err := s.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ss.Close()
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "t", Version: "1"}, nil).Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cs.Close()
+	call := connectEvaluate(t, srv)
 
-	call := func(args string) (string, bool) {
-		t.Helper()
-		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "evaluate", Arguments: json.RawMessage(args)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return res.Content[0].(*mcp.TextContent).Text, res.IsError
-	}
 	q := `"questions":{"q":{"type":"noul","instructions":"Is ` + "`item.subject`" + ` urgent?"}}`
 
 	t.Run("fan out with context", func(t *testing.T) {
@@ -608,5 +553,47 @@ func TestItems(t *testing.T) {
 				t.Errorf("IsError=%v, text=%q, want %q", isErr, text, tc.want)
 			}
 		})
+	}
+}
+
+// connectEvaluate registers the evaluate tool against srv and connects an MCP
+// client to it in memory, returning a call that yields the tool's text and
+// whether it was an error result.
+func connectEvaluate(t *testing.T, srv *httptest.Server) func(args string) (string, bool) {
+	t.Helper()
+	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: "test"}, nil)
+	registerTools(s, &Client{URL: srv.URL, APIKey: "k", HTTP: srv.Client(), Model: "m"})
+	ct, st := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	ss, err := s.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ss.Close() })
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "t", Version: "1"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cs.Close() })
+	return func(args string) (string, bool) {
+		t.Helper()
+		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "evaluate", Arguments: json.RawMessage(args)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.Content[0].(*mcp.TextContent).Text, res.IsError
+	}
+}
+
+// A 2xx that is not JSON (a proxy's HTML page, say) must not come back as a
+// successful answer on the single-request path either.
+func TestNonJSONSuccessIsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("<html>gateway</html>"))
+	}))
+	defer srv.Close()
+	text, isErr := connectEvaluate(t, srv)(`{"state":"s","questions":{"q":{"type":"noul","instructions":"i"}}}`)
+	if !isErr || !strings.Contains(text, "not valid JSON") {
+		t.Errorf("IsError=%v, text=%q", isErr, text)
 	}
 }

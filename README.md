@@ -84,7 +84,7 @@ It gets back the raw response JSON, with each answer under the same id you gave 
 - **Answers your code can branch on.** Three question types: `noul` (probability a condition holds), `choice` (one option from a map), `score` (position on ordered levels).
 - **Rate limits handled for you.** 429 and 529 responses are retried with exponential backoff. Other API errors come back to the agent as tool errors it can read and act on.
 - **Several questions, one call.** Batch independent questions over the same state; they run in parallel.
-- **One question set, many records.** Pass `items` (id → record) to ask the same questions of each record in its own request, a few at a time, up to 100 per call. Records are judged independently, answers come back keyed by item id, and a failed item is reported beside the others instead of failing the call.
+- **One question set, many records.** Pass `items` (id → record, up to 100) to ask the same questions of each record independently; a failed item is reported beside the others instead of failing the call.
 - **Agents that use it well out of the box.** The server ships usage guidance (narrow questions, JSON state, no-match options, evidence not verdicts) to the client, so the agent writes better questions without extra prompting.
 - **A single static binary.** No runtime, no Node, no Python. `evaluate update` upgrades it in place from a checksum-verified release. Read-only tool, 60s request timeout, responses over 16 MiB are rejected, never truncated.
 

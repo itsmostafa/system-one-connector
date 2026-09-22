@@ -5,7 +5,7 @@ Tests all sit in `evaluate_test.go`, table-driven over `httptest`.
 | File | Holds |
 |---|---|
 | `main.go` | cobra command tree, `route` (endpoint from env), the `instructions` const |
-| `client.go` | POSTs the request; retries 429/529 with backoff up to 3 times; rejects a body over the 16 MiB cap rather than truncating it |
+| `client.go` | POSTs the request; retries 429/529 with backoff up to 3 times; rejects a body over the 16 MiB cap rather than truncating it, and a non-JSON 2xx body |
 | `tools.go` | the `evaluate` tool: input schema in `jsonschema` struct tags, `validate`, and the `items` fan-out |
 | `setup.go` | registration for Claude Code/Desktop, Codex and pi; renders `pi.ts` |
 | `update.go` | self-update from a checksum-verified GitHub release |

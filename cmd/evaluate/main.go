@@ -38,7 +38,7 @@ const instructions = `The evaluate tool runs Jev, a TypeSafe System One model th
 - Jev reads literally and is not a calculator: state the exact condition, put boundary cases in criteria, and keep counting, arithmetic, and date comparison in code.
 - Send only the state the question needs: unrelated detail costs accuracy, and instructions embedded in state can steer the answer.
 - Batch independent questions over the same state into one call; they run in parallel and cannot see each other's answers.
-- To ask the same questions of many records, pass them as items (id → record, up to 100 per call) instead of repeating each question per record. Each item is judged in its own request with state {"item": ..., "context": <state>}, so items cannot see each other; answers come back under results.<id>, failures under errors.<id>.
+- To ask the same questions of many records, pass them as items (id → record, up to 100 per call) instead of repeating each question per record; each item is judged independently.
 - Include a no-match option in a choice when nothing may fit. Score levels must describe concrete situations.
 - A noul near 0.5 means uncertain, not medium intensity. Confidence measures how concentrated the distribution is, not correctness.
 - Jev returns no reasoning. To audit a low-confidence or near-0.5 answer, read its full probabilities, re-ask it as narrower nouls about the specific evidence, or escalate to a reasoning model or a human instead of acting.

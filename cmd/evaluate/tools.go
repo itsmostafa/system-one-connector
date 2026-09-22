@@ -43,7 +43,7 @@ type question struct {
 }
 
 type evaluateIn struct {
-	State     any                 `json:"state,omitempty" jsonschema:"content to judge: plain text, or a JSON object/array with named fields — observed evidence plus the background it is judged against (user goals, policies, identities) as named fields, not your verdict about it; required unless items is set, where it is sent to every item as context"`
+	State     any                 `json:"state,omitempty" jsonschema:"content to judge: plain text, or a JSON object/array with named fields — observed evidence and background as named fields, not your verdict about it; optional with items, where it is sent to every item as context"`
 	Questions map[string]question `json:"questions" jsonschema:"map of question id to question; answers come back under the same ids, which are not sent to the model"`
 	Items     map[string]any      `json:"items,omitempty" jsonschema:"optional map of item id to that item's state; asks the same questions of each item in its own request, so items are judged independently and cannot see each other; at most 100 items per call. Each request's state is {\"item\": <the item>} plus {\"context\": state} when state is set, so instructions reference fields like item.subject and context.user_goals. The result is {\"results\": {id: response}, \"errors\": {id: message}}; item ids are not sent to the model"`
 	Model     string              `json:"model,omitempty" jsonschema:"model to use; defaults to the latest Jev on whichever endpoint is configured"`
@@ -126,11 +126,6 @@ func evaluateItems(ctx context.Context, c *Client, in evaluateIn) ([]byte, error
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			b, err := c.Evaluate(ctx, request{state, in.Questions, in.Model})
-			// Results holds raw JSON, so one non-JSON 2xx body would fail the
-			// final Marshal and discard every sibling's answer with it.
-			if err == nil && !json.Valid(b) {
-				err = fmt.Errorf("evaluate: response is not valid JSON: %.200q", b)
-			}
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {

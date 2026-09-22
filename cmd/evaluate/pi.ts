@@ -126,7 +126,7 @@ export default function (pi: ExtensionAPI) {
       state: Type.Optional(
         Type.Any({
           description:
-            "content to judge: plain text, or a JSON object/array with named fields — observed evidence plus the background it is judged against (user goals, policies, identities) as named fields, not your verdict about it; required unless items is set, where it is sent to every item as context",
+            "content to judge: plain text, or a JSON object/array with named fields — observed evidence and background as named fields, not your verdict about it; optional with items, where it is sent to every item as context",
         }),
       ),
       questions: Type.Object(
