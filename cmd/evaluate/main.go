@@ -34,6 +34,8 @@ const instructions = `The evaluate tool runs Jev, a TypeSafe System One model th
 - State is what you observed — the raw ticket, diff, log, or field values, or a faithful condensation of them. Keep the uncertainty and the counterevidence; leave out your own verdict, which Jev reads as evidence.
 - Write instructions that name the condition to test, not the conclusion you expect. "Does the message report a failed payout?", not "Confirm this urgent payout failure."
 - A conclusion asserted in state biases the answer toward it, and the confidence that comes back is then agreement with yourself, not independent corroboration.
+- Jev reads literally and is not a calculator: state the exact condition, put boundary cases in criteria, and keep counting, arithmetic, and date comparison in code.
+- Send only the state the question needs: unrelated detail costs accuracy, and instructions embedded in state can steer the answer.
 - Batch independent questions over the same state into one call; they run in parallel and cannot see each other's answers.
 - Include a no-match option in a choice when nothing may fit. Score levels must describe concrete situations.
 - A noul near 0.5 means uncertain, not medium intensity. Confidence measures how concentrated the distribution is, not correctness.
