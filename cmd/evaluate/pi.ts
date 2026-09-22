@@ -151,7 +151,7 @@ export default function (pi: ExtensionAPI) {
           }),
         },
       ),
-      model: Type.Optional(Type.String({ description: "model to use; default jev-latest" })),
+      model: Type.Optional(Type.String({ description: "model to use; defaults to the latest Jev on whichever endpoint is configured" })),
     }),
     async execute(_toolCallId, params, signal) {
       return { content: [{ type: "text", text: await callEvaluate(params, signal) }], details: {} }
