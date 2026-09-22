@@ -19,7 +19,8 @@ Tests all sit in `evaluate_test.go`, table-driven over `httptest`.
 - `route` prefers `TYPESAFE_API_KEY` over `OPENROUTER_API_KEY`, so a stray OpenRouter key cannot re-bill an existing setup. An explicit `model` passes through unmapped, whichever route is live.
 - `TYPESAFE_BASE_URL` overrides the TypeSafe host (default `https://api.typesafe.ai`); `/v1/systemone` is appended, so the base is host-level and trailing slashes are tolerated. It must be an absolute `http(s)` URL — `route` rejects anything else, so `evaluate setup` fails instead of baking a dead endpoint into every client config. It does not touch the OpenRouter route. `setupEnv` already carries every `TYPESAFE_*` variable into the client configs, so a new one needs no setup change.
 - `add` in `tools.go` re-decodes the raw arguments with `UseNumber`, so numbers in the `any` fields (`state`, `instructions`, `criteria`) forward as written instead of rounding past 2^53. That means they arrive as `json.Number`, not `float64` — `jsonKind` matches both.
-- `validate` rejects only the criteria shapes the API definitely refuses; unknown question types pass through, because the API enumerates more of them than this tool documents.
+- `validate` rejects the criteria shapes the API refuses, plus two it mishandles: unknown question types (the API answers a bare "Invalid request."; its OpenAPI spec lists only noul, choice and score) and noul criteria keys other than `true`/`false` (silently dropped).
+- `TestPiDescriptionsMatch` fails when the `pi.ts` copies drift from `toolDescription` or the `jsonschema` tags.
 - `pi.ts` must stay valid TypeScript once `__EVALUATE_BINARY__` and `__EVALUATE_INSTRUCTIONS__` are replaced with JSON-marshaled strings. `node --check` covers syntax and `pi -e cmd/evaluate/pi.ts` covers behaviour; there is no tsc and no Node dev dependency.
 
 ## Tool reference

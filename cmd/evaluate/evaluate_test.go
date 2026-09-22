@@ -13,6 +13,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -261,6 +263,23 @@ func TestWritePiExtension(t *testing.T) {
 	}
 }
 
+// pi.ts hand-copies the tool and field descriptions, so a change to one side
+// must show up on the other. Joining `" + "` undoes the TS line wrapping.
+func TestPiDescriptionsMatch(t *testing.T) {
+	src := regexp.MustCompile(`"\s*\+\s*"`).ReplaceAllString(piExtension, "")
+	want := []string{toolDescription}
+	for _, typ := range []reflect.Type{reflect.TypeFor[evaluateIn](), reflect.TypeFor[question]()} {
+		for f := range typ.Fields() {
+			want = append(want, f.Tag.Get("jsonschema"))
+		}
+	}
+	for _, w := range want {
+		if !strings.Contains(src, w) {
+			t.Errorf("pi.ts is missing description %q", w)
+		}
+	}
+}
+
 func TestPiDir(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -312,11 +331,12 @@ func TestValidate(t *testing.T) {
 		// One level is accepted by the API, so it must not be rejected here.
 		{"score one level", question{Type: "score", Criteria: []any{"only"}}, ""},
 		{"choice object", question{Type: "choice", Criteria: obj}, ""},
-		{"noul object", question{Type: "noul", Criteria: obj}, ""},
+		{"noul true/false", question{Type: "noul", Criteria: map[string]any{"true": "y", "false": "n"}}, ""},
 		{"noul omitted", question{Type: "noul"}, ""},
-		// The server enumerates types this tool does not document; rejecting an
-		// unknown type here would break every one of them.
-		{"unknown type", question{Type: "bounding_box", Criteria: obj}, ""},
+		// The API silently drops these keys, so the criteria would do nothing.
+		{"noul yes/no", question{Type: "noul", Criteria: map[string]any{"yes": "y"}}, `noul criteria keys must be "true" or "false", got "yes"`},
+		// The API answers these with a bare "Invalid request.".
+		{"unknown type", question{Type: "yesno"}, `questions["q"].type: must be noul, choice, or score, got "yesno"`},
 	} {
 		tc.q.Instructions = "x"
 		err := validate(evaluateIn{State: "s", Questions: map[string]question{"q": tc.q}})
@@ -382,8 +402,7 @@ func TestBigNumbersSurviveForwarding(t *testing.T) {
 
 // TestValidateBlocksRequest drives the registered tool with real JSON arguments,
 // so it covers what TestValidate cannot: that the SDK decodes criteria into the
-// types validate type-switches on, that validate runs *before* the HTTP call,
-// and that a type this tool does not know still reaches the API.
+// types validate type-switches on, and that validate runs *before* the HTTP call.
 func TestValidateBlocksRequest(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -417,8 +436,7 @@ func TestValidateBlocksRequest(t *testing.T) {
 		{"score array", `["low","high"]`, "score", "", 1},
 		// The API accepts one level, so this must not be rejected locally.
 		{"score one level", `["only"]`, "score", "", 1},
-		// The API enumerates types this tool does not document; they pass through.
-		{"unknown type", `{"0":"low"}`, "bounding_box", "", 1},
+		{"unknown type", `{"0":"low"}`, "bounding_box", `questions["q"].type`, 0},
 	} {
 		calls = 0
 		args := `{"state":"s","questions":{"q":{"type":"` + tc.qtype +

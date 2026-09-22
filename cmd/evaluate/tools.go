@@ -47,15 +47,17 @@ type evaluateIn struct {
 	Model     string              `json:"model,omitempty" jsonschema:"model to use; defaults to the latest Jev on whichever endpoint is configured"`
 }
 
+const toolDescription = "Jev is a fast structured-decision model: unstructured state in, typed answers " +
+	"(noul, choice, score) with calibrated confidence out; 70-500ms, schema-enforced. " +
+	"Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
+	"and map-reduce over large data — wherever hand-written logic is too brittle or latency matters. " +
+	"Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options). " +
+	"Pass raw evidence as state, not your read of it — a conclusion asserted in state biases the answer toward it, and the confidence is then not independent corroboration."
+
 func registerTools(s *mcp.Server, c *Client) {
 	add(s, &mcp.Tool{
-		Name: "evaluate",
-		Description: "Jev is a fast structured-decision model: unstructured state in, typed answers " +
-			"(noul, choice, score) with calibrated confidence out; 70-500ms, schema-enforced. " +
-			"Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
-			"and map-reduce over large data — wherever hand-written logic is too brittle or latency matters. " +
-			"Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options). " +
-			"Pass raw evidence as state, not your read of it — a conclusion asserted in state biases the answer toward it, and the confidence is then not independent corroboration.",
+		Name:        "evaluate",
+		Description: toolDescription,
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, in evaluateIn) ([]byte, error) {
 		if in.State == nil {
@@ -78,10 +80,10 @@ func registerTools(s *mcp.Server, c *Client) {
 // sees its own JSON path instead of the union-branch path the API reports
 // ("questions.<id>.score.criteria" for input that has no score property at all).
 //
-// Only shapes the API definitely rejects are checked. An unknown type passes
-// through untouched: the server enumerates more types than this tool documents,
-// and guessing at the list here would break the ones it does not name. The
-// two-level minimum stays guidance, not a rule, because the API accepts one level.
+// It also catches what the API gets wrong for the caller: an unknown type comes
+// back as a bare "Invalid request.", and a noul criteria key other than true or
+// false is silently dropped. The two-level score minimum stays guidance, not a
+// rule, because the API accepts one level.
 func validate(in evaluateIn) error {
 	for id, q := range in.Questions {
 		var want string
@@ -100,12 +102,17 @@ func validate(in evaluateIn) error {
 			if q.Criteria == nil {
 				continue
 			}
-			if _, ok := q.Criteria.(map[string]any); ok {
+			if m, ok := q.Criteria.(map[string]any); ok {
+				for k := range m {
+					if k != "true" && k != "false" {
+						return fmt.Errorf(`questions[%q].criteria: noul criteria keys must be "true" or "false", got %q`, id, k)
+					}
+				}
 				continue
 			}
 			want = `an object with "true" and "false" descriptions, or omitted`
 		default:
-			continue
+			return fmt.Errorf("questions[%q].type: must be noul, choice, or score, got %q", id, q.Type)
 		}
 		// Bracket-quoted, not questions.%s.criteria: an id containing a dot
 		// would otherwise read as nesting that the request never had, which is
