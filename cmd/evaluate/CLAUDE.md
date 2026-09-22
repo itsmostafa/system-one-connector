@@ -6,14 +6,14 @@ Tests all sit in `evaluate_test.go`, table-driven over `httptest`.
 |---|---|
 | `main.go` | cobra command tree, `route` (endpoint from env), the `instructions` const |
 | `client.go` | POSTs the request; retries 429/529 with backoff up to 3 times; rejects a body over the 16 MiB cap rather than truncating it |
-| `tools.go` | the `evaluate` tool: input schema in `jsonschema` struct tags, plus `validate` |
+| `tools.go` | the `evaluate` tool: input schema in `jsonschema` struct tags, `validate`, and the `items` fan-out |
 | `setup.go` | registration for Claude Code/Desktop, Codex and pi; renders `pi.ts` |
 | `update.go` | self-update from a checksum-verified GitHub release |
 | `pi.ts` | pi extension template, embedded and rendered by `setup.go` |
 
 ## Constraints
 
-- `instructions` in `main.go` is served as the MCP server instructions *and* baked into the pi extension, so editing it there covers both. The tool description and the `jsonschema` field descriptions in `tools.go` do **not** flow: `pi.ts` hand-copies them as TypeBox descriptions. Change those four strings in lockstep.
+- `instructions` in `main.go` is served as the MCP server instructions *and* baked into the pi extension, so editing it there covers both. The tool description and the `jsonschema` field descriptions in `tools.go` do **not** flow: `pi.ts` hand-copies them as TypeBox descriptions. Change those strings in lockstep.
 - Every line of `instructions` is one guideline: `pi.ts` splits the const on newlines, so a bullet wrapped across two physical lines ships as two broken guidelines.
 - Stdout of `evaluate mcp` carries the MCP protocol; diagnostics go to stderr.
 - `route` prefers `TYPESAFE_API_KEY` over `OPENROUTER_API_KEY`, so a stray OpenRouter key cannot re-bill an existing setup. An explicit `model` passes through unmapped, whichever route is live.
@@ -25,7 +25,9 @@ Tests all sit in `evaluate_test.go`, table-driven over `httptest`.
 
 ## Tool reference
 
-`evaluate` takes `state` (raw evidence to judge), `questions` (id → `{type, instructions, criteria?}`) and an optional `model`.
+`evaluate` takes `state` (evidence to judge, plus background as named fields), `questions` (id → `{type, instructions, criteria?}`), an optional `model`, and optional `items` (id → record).
+
+`items` has no API counterpart: the tool sends one request per item, at most `itemConcurrency` at a time and `maxItems` per call, with state `{"item": <record>, "context": <state>}` (`context` only when `state` is set). Upstream bodies use `request`, not `evaluateIn`, so `items` never reaches the API. Per-item failures go to `errors` without cancelling siblings; only a total failure is a tool error.
 
 | Type | `criteria` |
 |---|---|
