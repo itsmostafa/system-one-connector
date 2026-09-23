@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 
@@ -594,6 +595,82 @@ func TestItemsAggregateCap(t *testing.T) {
 	for _, msg := range out.Errors {
 		if !strings.Contains(msg, "batch responses exceed") {
 			t.Errorf("error = %q", msg)
+		}
+	}
+}
+
+// The API lists choice probabilities in no fixed order, so the same question
+// over many items came back with its options shuffled. Every result must list
+// them in the order the caller wrote the criteria, and the criteria must reach
+// the API in that order too, not sorted alphabetically.
+func TestProbabilityOrder(t *testing.T) {
+	var (
+		mu     sync.Mutex
+		bodies []string
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		bodies = append(bodies, string(b))
+		mu.Unlock()
+		shuffled := func(pairs ...string) string {
+			rand.Shuffle(len(pairs), func(i, j int) { pairs[i], pairs[j] = pairs[j], pairs[i] })
+			return "{" + strings.Join(pairs, ",") + "}"
+		}
+		fmt.Fprintf(w, `{"model":"m","answers":{`+
+			`"c":{"type":"choice","choice":"zeta","confidence":0.4,"probabilities":%s},`+
+			`"s":{"type":"score","score":1.1,"confidence":0.6,"legend":%s,"probabilities":%s}},`+
+			`"usage":{"input_tokens":1,"output_tokens":1}}`,
+			shuffled(`"zeta":0.6`, `"alpha":0.3`, `"mid":0.1`),
+			shuffled(`"2":"high"`, `"0":"a < b"`, `"1":"mid"`, `"10":"top"`),
+			shuffled(`"2":0.2`, `"0":0.1`, `"1":0.6`, `"10":0.1`))
+	}))
+	defer srv.Close()
+
+	items := make([]string, 25)
+	for i := range items {
+		items[i] = fmt.Sprintf(`"i%d":{"n":%d}`, i, i)
+	}
+	text, isErr := connectEvaluate(t, srv)(`{"questions":{` +
+		`"c":{"type":"choice","instructions":"i","criteria":{"zeta":null,"alpha":"a","mid":null}},` +
+		`"s":{"type":"score","instructions":"i","criteria":["low","mid","high"]}},` +
+		`"items":{` + strings.Join(items, ",") + `}}`)
+	if isErr {
+		t.Fatalf("tool error: %s", text)
+	}
+	var out struct{ Results map[string]json.RawMessage }
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Results) != 25 {
+		t.Fatalf("%d results, want 25", len(out.Results))
+	}
+	for id, r := range out.Results {
+		var res struct {
+			Answers map[string]map[string]json.RawMessage
+		}
+		if err := json.Unmarshal(r, &res); err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range []struct {
+			q, field string
+			want     []string
+		}{
+			{"c", "probabilities", []string{"zeta", "alpha", "mid"}},
+			{"s", "probabilities", []string{"0", "1", "2", "10"}},
+			{"s", "legend", []string{"0", "1", "2", "10"}},
+		} {
+			if got := keyOrder(res.Answers[tc.q][tc.field]); !slices.Equal(got, tc.want) {
+				t.Errorf("%s: %s.%s keys = %v, want %v", id, tc.q, tc.field, got, tc.want)
+			}
+		}
+		if !strings.Contains(string(r), `"a < b"`) {
+			t.Errorf("%s: legend text re-escaped: %s", id, r)
+		}
+	}
+	for _, b := range bodies {
+		if !strings.Contains(b, `"criteria":{"zeta":null,"alpha":"a","mid":null}`) {
+			t.Fatalf("criteria not forwarded in caller order: %s", b)
 		}
 	}
 }
