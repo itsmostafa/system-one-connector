@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"strconv"
@@ -71,13 +72,17 @@ type request struct {
 	Model     string                 `json:"model"`
 }
 
-// apiQuestion is a question as sent upstream. Criteria stay the caller's raw
-// bytes: re-marshaled from the decoded map, a choice's options would reach the
-// model sorted alphabetically instead of in the order the caller wrote them.
+// apiQuestion is a question as sent upstream, plus what shape needs to post-
+// process its answer. Criteria stay the caller's raw bytes: re-marshaled from
+// the decoded map, a choice's options would reach the model sorted
+// alphabetically instead of in the order the caller wrote them.
 type apiQuestion struct {
 	Type         string          `json:"type"`
 	Instructions any             `json:"instructions"`
 	Criteria     json.RawMessage `json:"criteria,omitempty"`
+
+	order         []string // criteria object keys in the caller's order
+	minConfidence *float64
 }
 
 // itemConcurrency bounds in-flight requests in items mode, so a large map does
@@ -120,22 +125,23 @@ func registerTools(s *mcp.Server, c *Client) {
 		if in.Model == "" {
 			in.Model = c.Model
 		}
-		qs, order := upstream(in.Questions, args)
+		qs := upstream(in.Questions, args)
 		if in.Items == nil {
 			b, err := c.Evaluate(ctx, request{in.State, qs, in.Model})
 			if err != nil {
 				return nil, err
 			}
-			return shape(b, in.Questions, order), nil
+			b, _ = shape(b, qs, false)
+			return b, nil
 		}
-		return evaluateItems(ctx, c, in, qs, order)
+		return evaluateItems(ctx, c, in, qs)
 	})
 }
 
 // upstream pairs each question with its criteria exactly as the caller sent
 // them, and records each object's key order: a choice's options, which shape
 // uses to order the answer's probabilities.
-func upstream(questions map[string]question, args json.RawMessage) (map[string]apiQuestion, map[string][]string) {
+func upstream(questions map[string]question, args json.RawMessage) map[string]apiQuestion {
 	var raw struct {
 		Questions map[string]struct {
 			Criteria json.RawMessage `json:"criteria"`
@@ -144,18 +150,14 @@ func upstream(questions map[string]question, args json.RawMessage) (map[string]a
 	// The same bytes already decoded into questions, so this cannot fail.
 	json.Unmarshal(args, &raw)
 	qs := make(map[string]apiQuestion, len(questions))
-	order := map[string][]string{}
 	for id, q := range questions {
 		crit := raw.Questions[id].Criteria
 		if string(crit) == "null" {
 			crit = nil
 		}
-		qs[id] = apiQuestion{q.Type, q.Instructions, crit}
-		if keys := keyOrder(crit); keys != nil {
-			order[id] = keys
-		}
+		qs[id] = apiQuestion{q.Type, q.Instructions, crit, keyOrder(crit), q.MinConfidence}
 	}
-	return qs, order
+	return qs
 }
 
 // keyOrder lists a JSON object's keys in the order they appear, or nil when raw
@@ -185,21 +187,30 @@ func keyOrder(raw json.RawMessage) []string {
 // choice probabilities in no fixed order, so without this two items asked the
 // same question list their options differently. Every other field keeps its
 // bytes, though Go re-marshals object keys alphabetically. It also applies each
-// question's min_confidence. A reply that is not the expected shape passes
-// through unchanged: it is still the API's answer.
-func shape(b []byte, questions map[string]question, order map[string][]string) []byte {
+// question's min_confidence and reads the reply's model and usage for items
+// meta, dropping them when strip is set. A reply that is not the expected
+// shape passes through unchanged: it is still the API's answer.
+func shape(b []byte, qs map[string]apiQuestion, strip bool) ([]byte, replyMeta) {
 	var top map[string]json.RawMessage
 	var answers map[string]map[string]json.RawMessage
+	var m replyMeta
 	if json.Unmarshal(b, &top) != nil || json.Unmarshal(top["answers"], &answers) != nil || answers == nil {
-		return b
+		return b, m
+	}
+	json.Unmarshal(top["model"], &m.Model)
+	json.Unmarshal(top["usage"], &m.usage)
+	if strip {
+		delete(top, "model")
+		delete(top, "usage")
 	}
 	for id, a := range answers {
+		q := qs[id]
 		for _, f := range []string{"probabilities", "legend"} {
 			if v, ok := a[f]; ok {
-				a[f] = ordered(v, order[id])
+				a[f] = ordered(v, q.order)
 			}
 		}
-		if q := questions[id]; q.MinConfidence != nil && lowConfidence(a, *q.MinConfidence) {
+		if q.minConfidence != nil && lowConfidence(a, *q.minConfidence) {
 			a["uncertain"] = json.RawMessage("true")
 			if _, ok := a["choice"]; ok {
 				a["choice"], _ = marshal(abstain)
@@ -209,9 +220,9 @@ func shape(b []byte, questions map[string]question, order map[string][]string) [
 	top["answers"], _ = marshal(answers)
 	out, err := marshal(top)
 	if err != nil {
-		return b
+		return b, m
 	}
-	return out
+	return out, m
 }
 
 // marshal is json.Marshal without HTML escaping, which would otherwise rewrite
@@ -248,36 +259,33 @@ func ordered(v json.RawMessage, want []string) json.RawMessage {
 	if json.Unmarshal(v, &m) != nil || m == nil {
 		return v
 	}
-	keys := make([]string, 0, len(m))
-	for _, k := range want {
-		if _, ok := m[k]; ok && !slices.Contains(keys, k) {
-			keys = append(keys, k)
-		}
-	}
-	var rest []string
-	for k := range m {
-		if !slices.Contains(keys, k) {
-			rest = append(rest, k)
-		}
-	}
-	slices.SortFunc(rest, func(a, b string) int {
-		x, errA := strconv.Atoi(a)
-		y, errB := strconv.Atoi(b)
-		if errA == nil && errB == nil {
-			return x - y
-		}
-		return strings.Compare(a, b)
-	})
 	var buf bytes.Buffer
 	buf.WriteByte('{')
-	for i, k := range append(keys, rest...) {
-		if i > 0 {
+	put := func(k string) {
+		if buf.Len() > 1 {
 			buf.WriteByte(',')
 		}
 		kb, _ := marshal(k)
 		buf.Write(kb)
 		buf.WriteByte(':')
 		buf.Write(m[k])
+		delete(m, k)
+	}
+	for _, k := range want {
+		if _, ok := m[k]; ok {
+			put(k)
+		}
+	}
+	rest := slices.SortedFunc(maps.Keys(m), func(a, b string) int {
+		x, errA := strconv.Atoi(a)
+		y, errB := strconv.Atoi(b)
+		if errA == nil && errB == nil {
+			return cmp.Compare(x, y)
+		}
+		return strings.Compare(a, b)
+	})
+	for _, k := range rest {
+		put(k)
 	}
 	buf.WriteByte('}')
 	return buf.Bytes()
@@ -290,7 +298,7 @@ func ordered(v json.RawMessage, want []string) json.RawMessage {
 // maxBody bounds the whole batch, not just each reply: every stored result and
 // error counts against it, so 500 replies near the per-request cap cannot pile
 // up gigabytes. Once it is spent, later items keep only a short error.
-func evaluateItems(ctx context.Context, c *Client, in evaluateIn, qs map[string]apiQuestion, order map[string][]string) ([]byte, error) {
+func evaluateItems(ctx context.Context, c *Client, in evaluateIn, qs map[string]apiQuestion) ([]byte, error) {
 	var (
 		mu    sync.Mutex
 		wg    sync.WaitGroup
@@ -312,12 +320,9 @@ func evaluateItems(ctx context.Context, c *Client, in evaluateIn, qs map[string]
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			b, err := c.Evaluate(ctx, request{state, qs, in.Model})
-			var (
-				model string
-				u     itemUsage
-			)
+			var m replyMeta
 			if err == nil {
-				b, model, u = splitUsage(shape(b, in.Questions, order), in.IncludeItemUsage)
+				b, m = shape(b, qs, !in.IncludeItemUsage)
 			}
 			mu.Lock()
 			defer mu.Unlock()
@@ -332,9 +337,9 @@ func evaluateItems(ctx context.Context, c *Client, in evaluateIn, qs map[string]
 				out.Errors[id] = err.Error()
 			default:
 				out.Results[id] = b
-				out.Meta.InputTokens += u.InputTokens
-				out.Meta.OutputTokens += u.OutputTokens
-				out.Meta.Model = cmp.Or(out.Meta.Model, model)
+				out.Meta.InputTokens += m.InputTokens
+				out.Meta.OutputTokens += m.OutputTokens
+				out.Meta.Model = cmp.Or(out.Meta.Model, m.Model)
 			}
 			if size+n <= maxBody {
 				size += n
@@ -402,10 +407,8 @@ func validate(in evaluateIn) error {
 				continue
 			}
 			want = `an object with "true" and "false" descriptions, or omitted`
-		case "bool", "boolean", "yesno":
-			return fmt.Errorf("questions[%q].type: must be noul, choice, or score, got %q; use \"noul\" for yes/no questions", id, q.Type)
 		default:
-			return fmt.Errorf("questions[%q].type: must be noul, choice, or score, got %q", id, q.Type)
+			return fmt.Errorf("questions[%q].type: must be noul, choice, or score, got %q; use \"noul\" for yes/no questions", id, q.Type)
 		}
 		// Bracket-quoted, not questions.%s.criteria: an id containing a dot
 		// would otherwise read as nesting that the request never had, which is
@@ -446,37 +449,19 @@ func jsonKind(v any) string {
 // otherwise repeat: the model, and usage summed over the items that succeeded.
 // LatencyMS is wall clock for the whole call.
 type itemsMeta struct {
-	Model        string `json:"model"`
-	InputTokens  int64  `json:"input_tokens"`
-	OutputTokens int64  `json:"output_tokens"`
-	ItemCount    int    `json:"item_count"`
-	LatencyMS    int64  `json:"latency_ms"`
+	Model string `json:"model"`
+	usage
+	ItemCount int   `json:"item_count"`
+	LatencyMS int64 `json:"latency_ms"`
 }
 
-// itemUsage is the per-reply metadata that itemsMeta totals.
-type itemUsage struct {
+type usage struct {
 	InputTokens  int64 `json:"input_tokens"`
 	OutputTokens int64 `json:"output_tokens"`
 }
 
-// splitUsage reads a reply's model and usage for meta and, unless keep is set,
-// drops them from the reply. A reply it cannot read passes through unchanged.
-func splitUsage(b []byte, keep bool) ([]byte, string, itemUsage) {
-	var top map[string]json.RawMessage
-	var model string
-	var u itemUsage
-	if json.Unmarshal(b, &top) != nil {
-		return b, model, u
-	}
-	json.Unmarshal(top["model"], &model)
-	json.Unmarshal(top["usage"], &u)
-	if keep {
-		return b, model, u
-	}
-	delete(top, "model")
-	delete(top, "usage")
-	if out, err := marshal(top); err == nil {
-		b = out
-	}
-	return b, model, u
+// replyMeta is one reply's model and usage, which shape reads for itemsMeta.
+type replyMeta struct {
+	Model string
+	usage
 }

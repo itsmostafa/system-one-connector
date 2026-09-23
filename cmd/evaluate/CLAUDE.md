@@ -21,7 +21,7 @@ Tests all sit in `evaluate_test.go`, table-driven over `httptest`.
 - `add` in `tools.go` re-decodes the raw arguments with `UseNumber`, so numbers in the `any` fields (`state`, `instructions`, `criteria`) forward as written instead of rounding past 2^53. That means they arrive as `json.Number`, not `float64` — `jsonKind` matches both.
 - Criteria go upstream as the caller's raw bytes (`apiQuestion`, built by `upstream`), not re-marshaled from `question.Criteria`: a Go map would sort a choice's options alphabetically. `question` has no custom (un)marshaler, so the inferred input schema stays plain.
 - `shape` reorders `probabilities` (and `legend`) into criteria order, or level order for score; the API emits choice probabilities in no fixed order. Anything it does not recognise passes through unchanged, never as an error. It re-encodes without HTML escaping, and other object keys come out alphabetical.
-- `min_confidence` never goes upstream (`apiQuestion` has no such field); `shape` applies it via `lowConfidence`.
+- `min_confidence` never goes upstream (`apiQuestion` carries it unexported); `shape` applies it via `lowConfidence`.
 - `validate` rejects the criteria shapes the API refuses, plus two it mishandles: unknown question types (the API answers a bare "Invalid request."; its OpenAPI spec lists only noul, choice and score) and noul criteria keys other than `true`/`false` (silently dropped).
 - `TestPiDescriptionsMatch` fails when the `pi.ts` copies drift from `toolDescription` or the `jsonschema` tags.
 - `pi.ts` must stay valid TypeScript once `__EVALUATE_BINARY__` and `__EVALUATE_INSTRUCTIONS__` are replaced with JSON-marshaled strings. `node --check` covers syntax and `pi -e cmd/evaluate/pi.ts` covers behaviour; there is no tsc and no Node dev dependency.
@@ -30,7 +30,7 @@ Tests all sit in `evaluate_test.go`, table-driven over `httptest`.
 
 `evaluate` takes `state` (evidence to judge, plus background as named fields), `questions` (id → `{type, instructions, criteria?, min_confidence?}`), an optional `model`, optional `items` (id → record), and `include_item_usage`.
 
-`items` has no API counterpart: the tool sends one request per item, at most `itemConcurrency` at a time and `maxItems` per call, with state `{"item": <record>, "context": <state>}` (`context` only when `state` is set). Upstream bodies use `request`, not `evaluateIn`, so `items` never reaches the API. Per-item failures go to `errors` (always present) without cancelling siblings; only a total failure is a tool error. `meta` carries the model, summed usage, item count and wall-clock latency once; `splitUsage` strips each item's `model`/`usage` unless `include_item_usage` is set.
+`items` has no API counterpart: the tool sends one request per item, at most `itemConcurrency` at a time and `maxItems` per call, with state `{"item": <record>, "context": <state>}` (`context` only when `state` is set). Upstream bodies use `request`, not `evaluateIn`, so `items` never reaches the API. Per-item failures go to `errors` (always present) without cancelling siblings; only a total failure is a tool error. `meta` carries the model, summed usage, item count and wall-clock latency once; `shape` strips each item's `model`/`usage` unless `include_item_usage` is set.
 
 | Type | `criteria` |
 |---|---|
