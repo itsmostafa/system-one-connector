@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/itsmostafa/typesafe-mcp/main/instal
 TYPESAFE_API_KEY=your-key evaluate setup mcp
 ```
 
-This finds Claude Code, Claude Desktop and Codex and registers `evaluate` with each one. If you already have an [OpenRouter](https://openrouter.ai/~typesafe/jev-latest) account, set `OPENROUTER_API_KEY` instead. For pi, run `evaluate setup pi`.
+This finds Claude Code, Claude Desktop and Codex and registers `evaluate` with each one. If you already have an [OpenRouter](https://openrouter.ai/~typesafe/jev-latest) account, set `OPENROUTER_API_KEY` instead. To run an open model such as Laya locally, point `TYPESAFE_BASE_URL` at your server, for example `http://127.0.0.1:8787` (see [custom hosts](docs/configuration.md#custom-typesafe-host)). For pi, run `evaluate setup pi`.
 
 **3. Ask a question:**
 
