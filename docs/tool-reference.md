@@ -14,6 +14,19 @@
 
 A `noul` or `choice` question can also set `min_confidence` (0 to 1), which lets it abstain. `evaluate` applies it and never sends it to the API. When the answer's confidence is below the threshold, the answer gains `"uncertain": true`, and a `choice` answer's `choice` becomes `"__uncertain__"`. Confidence here is the API's `confidence` for a choice and `|2p − 1|` for a noul, which is the same formula with two outcomes. `probabilities` and the `noul` value are kept, so you can still read what Jev leaned toward. `__uncertain__` is reserved and cannot be used as an option name.
 
+Send evidence, not conclusions. A field that states your own reading of the evidence pulls the answer toward it, and the confidence that comes back then only agrees with you:
+
+```json
+// Evidence: Jev judges whether the user replied.
+{"thread": [
+  {"from": "agent", "at": "2026-09-01T10:00Z", "text": "Can you send the invoice?"},
+  {"from": "user",  "at": "2026-09-01T12:30Z", "text": "Attached."}
+]}
+
+// Editorialized: the note answers the question for Jev.
+{"thread": [...], "note": "user already replied"}
+```
+
 Question IDs are not sent to the model, so `instructions` must state the full question on its own. `instructions` can be a string, or an object or array when definitions, contrasts or examples make the question clearer. To refer to a nested field in `state`, use a backticked path such as `` `ticket.messages[0].text` ``.
 
 ## Question types

@@ -94,7 +94,7 @@ const toolDescription = "Jev is a fast structured-decision model: unstructured s
 	"Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
 	"and mapping one question set over many records via items — wherever hand-written logic is too brittle or latency matters. " +
 	"Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options). " +
-	"Pass raw evidence as state, not your read of it — a conclusion asserted in state biases the answer toward it, and the confidence is then not independent corroboration."
+	"Pass raw evidence as state, not your read of it — a conclusion asserted in state biases the answer toward it, and the confidence is then not independent corroboration. E.g. to ask whether a ticket needs a follow-up, send the thread's messages with their senders and timestamps, not the thread plus a note field saying 'user already replied'."
 
 func registerTools(s *mcp.Server, c *Client) {
 	add(s, &mcp.Tool{
