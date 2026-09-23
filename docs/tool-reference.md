@@ -10,6 +10,7 @@
 | `questions` | yes | Map of question ID to `{type, instructions, criteria?}`. Answers come back under the same IDs. |
 | `items` | no | Map of item ID to record. Each record is judged separately. See [Many records](#many-records-items). |
 | `model` | no | Defaults to `jev-latest`, or `~typesafe/jev-latest` on OpenRouter. |
+| `include_item_usage` | no | With `items`, keep each item response's own `model` and `usage`. Default `false`: they are reported once in `meta`. |
 
 Question IDs are not sent to the model, so `instructions` must state the full question on its own. `instructions` can be a string, or an object or array when definitions, contrasts or examples make the question clearer. To refer to a nested field in `state`, use a backticked path such as `` `ticket.messages[0].text` ``.
 
@@ -64,7 +65,8 @@ Score answers are 0-indexed: N levels score from `0` to `N-1`. So `3.87` over 5 
 
 - The tool sends one request per item, with state `{"item": <record>, "context": <state>}`. `context` is included only when `state` is set.
 - A call accepts at most 100 items, and at most 8 requests run at once.
-- The result is `{"results": {id: response}, "errors": {id: message}}`.
+- The result is `{"results": {id: response}, "errors": {id: message}, "meta": {...}}`. `errors` is always present, empty when every item succeeded.
+- `meta` reports the call once: `model`, `input_tokens` and `output_tokens` summed over the items that succeeded, `item_count` (items sent), and `latency_ms` (wall clock for the whole call). Each item response leaves out its own `model` and `usage`; set `include_item_usage: true` to keep them.
 - If one item fails, it appears in `errors` and the other items still complete. The tool call itself fails only when every item fails.
 - All responses in a batch together must stay under 16 MiB. Once that limit is reached, the remaining results are dropped and appear in `errors`. Split large batches across several calls.
 

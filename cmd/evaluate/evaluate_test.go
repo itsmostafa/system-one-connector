@@ -675,6 +675,48 @@ func TestProbabilityOrder(t *testing.T) {
 	}
 }
 
+// Model and usage are the same on every item, so items mode reports them once
+// in meta and strips them per item unless the caller opts back in.
+func TestItemsMeta(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"model":"jev-x","answers":{"q":{"type":"noul","noul":0.9}},"usage":{"input_tokens":10,"output_tokens":2}}`))
+	}))
+	defer srv.Close()
+	call := connectEvaluate(t, srv)
+	args := `{"questions":{"q":{"type":"noul","instructions":"i"}},"items":{"a":{},"b":{},"c":{}}`
+	for _, keep := range []bool{false, true} {
+		extra := ""
+		if keep {
+			extra = `,"include_item_usage":true`
+		}
+		text, isErr := call(args + extra + `}`)
+		if isErr {
+			t.Fatalf("tool error: %s", text)
+		}
+		var out struct {
+			Results map[string]map[string]json.RawMessage
+			Meta    map[string]any
+		}
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatal(err)
+		}
+		m := out.Meta
+		if m["model"] != "jev-x" || m["input_tokens"] != 30.0 || m["output_tokens"] != 6.0 || m["item_count"] != 3.0 {
+			t.Errorf("keep=%v: meta = %v", keep, m)
+		}
+		if _, ok := m["latency_ms"].(float64); !ok {
+			t.Errorf("keep=%v: latency_ms missing: %v", keep, m)
+		}
+		for id, r := range out.Results {
+			_, hasUsage := r["usage"]
+			_, hasModel := r["model"]
+			if hasUsage != keep || hasModel != keep || r["answers"] == nil {
+				t.Errorf("keep=%v: results[%s] = %v", keep, id, r)
+			}
+		}
+	}
+}
+
 // connectEvaluate registers the evaluate tool against srv and connects an MCP
 // client to it in memory, returning a call that yields the tool's text and
 // whether it was an error result.

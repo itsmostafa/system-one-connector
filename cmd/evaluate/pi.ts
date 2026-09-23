@@ -159,12 +159,18 @@ export default function (pi: ExtensionAPI) {
           {},
           {
             description:
-              `optional map of item id to that item's state; asks the same questions of each item in its own request, so items are judged independently and cannot see each other; at most 100 items per call. Each request's state is {"item": <the item>} plus {"context": state} when state is set, so instructions reference fields like item.subject and context.user_goals. The result is {"results": {id: response}, "errors": {id: message}}; item ids are not sent to the model`,
+              `optional map of item id to that item's state; asks the same questions of each item in its own request, so items are judged independently and cannot see each other; at most 100 items per call. Each request's state is {"item": <the item>} plus {"context": state} when state is set, so instructions reference fields like item.subject and context.user_goals. The result is {"results": {id: response}, "errors": {id: message}, "meta": {model, input_tokens, output_tokens, item_count, latency_ms}}, where meta totals usage over the call and each response omits its own model and usage unless include_item_usage is set; item ids are not sent to the model`,
             additionalProperties: Type.Any(),
           },
         ),
       ),
       model: Type.Optional(Type.String({ description: "model to use; defaults to the latest Jev on whichever endpoint is configured" })),
+      include_item_usage: Type.Optional(
+        Type.Boolean({
+          description:
+            "items only: keep each item response's own model and usage fields; by default they are dropped and reported once in meta",
+        }),
+      ),
     }),
     async execute(_toolCallId, params, signal) {
       return { content: [{ type: "text", text: await callEvaluate(params, signal) }], details: {} }

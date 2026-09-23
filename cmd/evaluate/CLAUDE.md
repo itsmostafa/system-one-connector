@@ -27,9 +27,9 @@ Tests all sit in `evaluate_test.go`, table-driven over `httptest`.
 
 ## Tool reference
 
-`evaluate` takes `state` (evidence to judge, plus background as named fields), `questions` (id → `{type, instructions, criteria?}`), an optional `model`, and optional `items` (id → record).
+`evaluate` takes `state` (evidence to judge, plus background as named fields), `questions` (id → `{type, instructions, criteria?}`), an optional `model`, optional `items` (id → record), and `include_item_usage`.
 
-`items` has no API counterpart: the tool sends one request per item, at most `itemConcurrency` at a time and `maxItems` per call, with state `{"item": <record>, "context": <state>}` (`context` only when `state` is set). Upstream bodies use `request`, not `evaluateIn`, so `items` never reaches the API. Per-item failures go to `errors` without cancelling siblings; only a total failure is a tool error.
+`items` has no API counterpart: the tool sends one request per item, at most `itemConcurrency` at a time and `maxItems` per call, with state `{"item": <record>, "context": <state>}` (`context` only when `state` is set). Upstream bodies use `request`, not `evaluateIn`, so `items` never reaches the API. Per-item failures go to `errors` (always present) without cancelling siblings; only a total failure is a tool error. `meta` carries the model, summed usage, item count and wall-clock latency once; `splitUsage` strips each item's `model`/`usage` unless `include_item_usage` is set.
 
 | Type | `criteria` |
 |---|---|

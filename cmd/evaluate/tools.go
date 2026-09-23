@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -49,8 +51,10 @@ type question struct {
 type evaluateIn struct {
 	State     any                 `json:"state,omitempty" jsonschema:"content to judge: plain text, or a JSON object/array with named fields — observed evidence and background as named fields, not your verdict about it; optional with items, where it is sent to every item as context"`
 	Questions map[string]question `json:"questions" jsonschema:"map of question id to question; answers come back under the same ids, which are not sent to the model"`
-	Items     map[string]any      `json:"items,omitempty" jsonschema:"optional map of item id to that item's state; asks the same questions of each item in its own request, so items are judged independently and cannot see each other; at most 100 items per call. Each request's state is {\"item\": <the item>} plus {\"context\": state} when state is set, so instructions reference fields like item.subject and context.user_goals. The result is {\"results\": {id: response}, \"errors\": {id: message}}; item ids are not sent to the model"`
+	Items     map[string]any      `json:"items,omitempty" jsonschema:"optional map of item id to that item's state; asks the same questions of each item in its own request, so items are judged independently and cannot see each other; at most 100 items per call. Each request's state is {\"item\": <the item>} plus {\"context\": state} when state is set, so instructions reference fields like item.subject and context.user_goals. The result is {\"results\": {id: response}, \"errors\": {id: message}, \"meta\": {model, input_tokens, output_tokens, item_count, latency_ms}}, where meta totals usage over the call and each response omits its own model and usage unless include_item_usage is set; item ids are not sent to the model"`
 	Model     string              `json:"model,omitempty" jsonschema:"model to use; defaults to the latest Jev on whichever endpoint is configured"`
+
+	IncludeItemUsage bool `json:"include_item_usage,omitempty" jsonschema:"items only: keep each item response's own model and usage fields; by default they are dropped and reported once in meta"`
 }
 
 // request is the body the API takes: evaluateIn minus items, which the API
@@ -261,13 +265,15 @@ func ordered(v json.RawMessage, want []string) json.RawMessage {
 // up gigabytes. Once it is spent, later items keep only a short error.
 func evaluateItems(ctx context.Context, c *Client, in evaluateIn, qs map[string]apiQuestion, order map[string][]string) ([]byte, error) {
 	var (
-		mu   sync.Mutex
-		wg   sync.WaitGroup
-		size int
-		sem  = make(chan struct{}, itemConcurrency)
-		out  = struct {
+		mu    sync.Mutex
+		wg    sync.WaitGroup
+		size  int
+		sem   = make(chan struct{}, itemConcurrency)
+		start = time.Now()
+		out   = struct {
 			Results map[string]json.RawMessage `json:"results"`
 			Errors  map[string]string          `json:"errors"`
+			Meta    itemsMeta                  `json:"meta"`
 		}{Results: map[string]json.RawMessage{}, Errors: map[string]string{}}
 	)
 	for id, item := range in.Items {
@@ -279,8 +285,12 @@ func evaluateItems(ctx context.Context, c *Client, in evaluateIn, qs map[string]
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			b, err := c.Evaluate(ctx, request{state, qs, in.Model})
+			var (
+				model string
+				u     itemUsage
+			)
 			if err == nil {
-				b = shape(b, order)
+				b, model, u = splitUsage(shape(b, order), in.IncludeItemUsage)
 			}
 			mu.Lock()
 			defer mu.Unlock()
@@ -295,6 +305,9 @@ func evaluateItems(ctx context.Context, c *Client, in evaluateIn, qs map[string]
 				out.Errors[id] = err.Error()
 			default:
 				out.Results[id] = b
+				out.Meta.InputTokens += u.InputTokens
+				out.Meta.OutputTokens += u.OutputTokens
+				out.Meta.Model = cmp.Or(out.Meta.Model, model)
 			}
 			if size+n <= maxBody {
 				size += n
@@ -302,6 +315,9 @@ func evaluateItems(ctx context.Context, c *Client, in evaluateIn, qs map[string]
 		})
 	}
 	wg.Wait()
+	out.Meta.ItemCount = len(in.Items)
+	out.Meta.LatencyMS = time.Since(start).Milliseconds()
+	out.Meta.Model = cmp.Or(out.Meta.Model, in.Model)
 	if len(out.Results) == 0 {
 		// Every item failed; report one error rather than a map of identical ones.
 		for id, msg := range out.Errors {
@@ -382,4 +398,43 @@ func jsonKind(v any) string {
 		return "a boolean"
 	}
 	return "an unsupported value"
+}
+
+// itemsMeta reports once per items call what every item response would
+// otherwise repeat: the model, and usage summed over the items that succeeded.
+// LatencyMS is wall clock for the whole call.
+type itemsMeta struct {
+	Model        string `json:"model"`
+	InputTokens  int64  `json:"input_tokens"`
+	OutputTokens int64  `json:"output_tokens"`
+	ItemCount    int    `json:"item_count"`
+	LatencyMS    int64  `json:"latency_ms"`
+}
+
+// itemUsage is the per-reply metadata that itemsMeta totals.
+type itemUsage struct {
+	InputTokens  int64 `json:"input_tokens"`
+	OutputTokens int64 `json:"output_tokens"`
+}
+
+// splitUsage reads a reply's model and usage for meta and, unless keep is set,
+// drops them from the reply. A reply it cannot read passes through unchanged.
+func splitUsage(b []byte, keep bool) ([]byte, string, itemUsage) {
+	var top map[string]json.RawMessage
+	var model string
+	var u itemUsage
+	if json.Unmarshal(b, &top) != nil {
+		return b, model, u
+	}
+	json.Unmarshal(top["model"], &model)
+	json.Unmarshal(top["usage"], &u)
+	if keep {
+		return b, model, u
+	}
+	delete(top, "model")
+	delete(top, "usage")
+	if out, err := marshal(top); err == nil {
+		b = out
+	}
+	return b, model, u
 }
