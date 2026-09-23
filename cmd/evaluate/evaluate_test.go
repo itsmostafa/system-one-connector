@@ -340,6 +340,7 @@ func TestValidate(t *testing.T) {
 		{"noul yes/no", question{Type: "noul", Criteria: map[string]any{"yes": "y"}}, `noul criteria keys must be "true" or "false", got "yes"`},
 		// The API answers these with a bare "Invalid request.".
 		{"unknown type", question{Type: "yesno"}, `questions["q"].type: must be noul, choice, or score, got "yesno"`},
+		{"bool type", question{Type: "bool"}, `got "bool"; use "noul" for yes/no questions`},
 	} {
 		tc.q.Instructions = "x"
 		err := validate(evaluateIn{State: "s", Questions: map[string]question{"q": tc.q}})

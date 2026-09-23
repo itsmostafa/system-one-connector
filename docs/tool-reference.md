@@ -20,7 +20,7 @@ Question IDs are not sent to the model, so `instructions` must state the full qu
 
 | Type | Answers | `criteria` |
 |---|---|---|
-| `noul` | Probability that a yes/no condition holds | Optional: `{"true": ..., "false": ...}` descriptions |
+| `noul` | Probability that a yes/no condition holds. `noul` is TypeSafe's name for this type, not a typo for `bool`; `bool`, `boolean` and `yesno` are rejected with a pointer to `noul` | Optional: `{"true": ..., "false": ...}` descriptions |
 | `choice` | One option from a set, with a probability for each | Required: map of option to description (or `null`) |
 | `score` | Probability-weighted position on ordered levels | Required: array of level descriptions, lowest first |
 
