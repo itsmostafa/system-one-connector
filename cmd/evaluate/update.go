@@ -95,7 +95,7 @@ func runUpdate(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("fetching latest release: %w", err)
 	}
-	if version == release.TagName {
+	if !newerRelease(release.TagName) {
 		fmt.Printf("Already up to date (%s).\n", version)
 		return nil
 	}
