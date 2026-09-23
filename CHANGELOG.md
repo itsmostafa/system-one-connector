@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.4.5](https://github.com/itsmostafa/typesafe-mcp/compare/v0.4.4...v0.4.5) (2026-09-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **tools:** items results no longer carry per-item model and usage by default; read meta, or pass include_item_usage: true.
+
+### Features
+
+* **tools:** abstain below min_confidence ([66c2e7f](https://github.com/itsmostafa/typesafe-mcp/commit/66c2e7f6e1d53e6896c53ae57c95750b085e3047))
+* **tools:** announce newer releases in server instructions ([5395c39](https://github.com/itsmostafa/typesafe-mcp/commit/5395c394b01204b632041f210fed11797b705be0))
+* **tools:** announce newer releases in server instructions ([185c79c](https://github.com/itsmostafa/typesafe-mcp/commit/185c79c919806ba7abce2b94a3316fa8bbc5542c))
+* **tools:** explain noul and hint on bool ([c9661c6](https://github.com/itsmostafa/typesafe-mcp/commit/c9661c671f4526f9098ea8a81f4d2bc6c791c3ae))
+* **tools:** raise the items cap to 500 ([4a6d908](https://github.com/itsmostafa/typesafe-mcp/commit/4a6d9088b623f7597b4c6816e6bf9d700a18f9c6))
+* **tools:** report item model and usage once in meta ([19c7979](https://github.com/itsmostafa/typesafe-mcp/commit/19c797907ce68528290c48a5b2ec1f35b67b0928))
+
+
+### Bug Fixes
+
+* **cli:** skip update check for pi and order prereleases before releases ([bb8189e](https://github.com/itsmostafa/typesafe-mcp/commit/bb8189e65c92587e0002c5d56803e1f99be83ed8))
+* **cli:** stop evaluate update from downgrading a newer build ([7599d27](https://github.com/itsmostafa/typesafe-mcp/commit/7599d27f18288f17b1c3af9bf2a5def334f9dc8d))
+* **setup:** point skipped-client messages at the configuration docs ([84ad7f7](https://github.com/itsmostafa/typesafe-mcp/commit/84ad7f76ef3d56395724fc04569c6448e7b61c49))
+* **tools:** always return errors in items results ([17f8608](https://github.com/itsmostafa/typesafe-mcp/commit/17f86086855412bcc94da292df130679d1ae0828))
+* **tools:** keep probabilities in criteria order ([2621758](https://github.com/itsmostafa/typesafe-mcp/commit/262175868d02dc07565592cc3f9a615d276ce054))
+
+
+### Miscellaneous Chores
+
+* release 0.4.5 ([99bffd7](https://github.com/itsmostafa/typesafe-mcp/commit/99bffd74786290f25d483baa784ba068cca30e21))
+
 ## [0.4.4](https://github.com/itsmostafa/typesafe-mcp/compare/v0.4.3...v0.4.4) (2026-09-23)
 
 
