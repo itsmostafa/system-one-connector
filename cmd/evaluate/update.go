@@ -144,7 +144,7 @@ func runUpdate(ctx context.Context) error {
 // updateNotice returns an instructions line announcing a newer release, or ""
 // for a dev build, an up-to-date or newer one, or a slow or unreachable GitHub.
 func updateNotice(ctx context.Context) string {
-	if _, ok := parseVersion(version); !ok {
+	if _, _, ok := parseVersion(version); !ok {
 		return ""
 	}
 	// The check delays server startup, so it gets a tight budget.
@@ -161,20 +161,26 @@ func updateNotice(ctx context.Context) string {
 // build takes any release. A tag goes public before its draft release is
 // published, so a go install can run ahead of releases/latest: no downgrade.
 func newerRelease(tag string) bool {
-	latest, ok := parseVersion(tag)
+	latest, latestPre, ok := parseVersion(tag)
 	if !ok {
 		return false
 	}
-	current, ok := parseVersion(version)
-	return !ok || slices.Compare(latest[:], current[:]) > 0
+	current, currentPre, ok := parseVersion(version)
+	if !ok {
+		return true
+	}
+	// A prerelease, including a pseudo-version like v0.4.5-0.<time>-<sha>,
+	// precedes its release, so v0.4.5 is newer than a build of it.
+	c := slices.Compare(latest[:], current[:])
+	return c > 0 || (c == 0 && currentPre && !latestPre)
 }
 
-// parseVersion reads the major, minor and patch numbers of a vX.Y.Z version,
-// ignoring any suffix, so a pseudo-version counts as its base release.
-func parseVersion(v string) ([3]int, bool) {
-	var p [3]int
+// parseVersion reads the major, minor and patch numbers of a vX.Y.Z version
+// and whether it carries a -prerelease suffix; +build metadata is ignored.
+func parseVersion(v string) (p [3]int, pre, ok bool) {
+	v, _, _ = strings.Cut(v, "+")
 	n, _ := fmt.Sscanf(v, "v%d.%d.%d", &p[0], &p[1], &p[2])
-	return p, n == 3
+	return p, strings.Contains(v, "-"), n == 3
 }
 
 type githubRelease struct {

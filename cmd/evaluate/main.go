@@ -65,9 +65,14 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
+	var noUpdateCheck bool
 	mcpCmd := &cobra.Command{Use: "mcp", Short: "Run the MCP server over stdio", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-		return serve(cmd.Context())
+		return serve(cmd.Context(), !noUpdateCheck)
 	}}
+	// pi starts a fresh server per call and never reads its instructions, so
+	// its extension passes this to skip the GitHub round trip.
+	mcpCmd.Flags().BoolVar(&noUpdateCheck, "no-update-check", false, "skip the newer-release check at startup")
+	mcpCmd.Flags().MarkHidden("no-update-check")
 	// Args+RunE, not a bare parent: cobra checks Runnable before validating args,
 	// so without both `evaluate setup typo` prints help and exits 0.
 	setupCmd := &cobra.Command{
@@ -142,14 +147,18 @@ func route() (*Client, error) {
 	return nil, errors.New("set TYPESAFE_API_KEY (https://console.typesafe.ai/) or OPENROUTER_API_KEY (https://openrouter.ai/keys)")
 }
 
-func serve(ctx context.Context) error {
+func serve(ctx context.Context, checkUpdate bool) error {
 	c, err := route()
 	if err != nil {
 		return err
 	}
 	c.HTTP = &http.Client{Timeout: 60 * time.Second}
 	c.Backoff = time.Second
-	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: version}, &mcp.ServerOptions{Instructions: instructions + updateNotice(ctx)})
+	instr := instructions
+	if checkUpdate {
+		instr += updateNotice(ctx)
+	}
+	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: version}, &mcp.ServerOptions{Instructions: instr})
 	registerTools(s, c)
 	return s.Run(ctx, &mcp.StdioTransport{})
 }

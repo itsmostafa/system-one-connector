@@ -24,7 +24,7 @@ function callEvaluate(args: unknown, signal?: AbortSignal): Promise<string> {
       reject(new Error("evaluate: aborted"))
       return
     }
-    const child = spawn(BINARY, ["mcp"], { stdio: ["pipe", "pipe", "pipe"], env: process.env })
+    const child = spawn(BINARY, ["mcp", "--no-update-check"], { stdio: ["pipe", "pipe", "pipe"], env: process.env })
 
     let settled = false
     const finish = (err: Error | null, text?: string) => {

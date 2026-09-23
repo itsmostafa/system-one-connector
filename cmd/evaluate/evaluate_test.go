@@ -644,6 +644,8 @@ func TestUpdateNotice(t *testing.T) {
 		{"v9.9.9", ""},
 		{"v10.0.0", ""},
 		{"v9.9.10-0.20260101000000-abcdef123456", ""},
+		{"v9.9.9+dirty", ""},
+		{"v9.9.9-0.20260101000000-abcdef123456", "evaluate v9.9.9 is available (running v9.9.9-0.20260101000000-abcdef123456)"},
 		{"v9.9.8", "evaluate v9.9.9 is available (running v9.9.8)"},
 		{"v0.1.0", "evaluate v9.9.9 is available (running v0.1.0)"},
 	} {
