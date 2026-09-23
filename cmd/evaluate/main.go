@@ -149,7 +149,7 @@ func serve(ctx context.Context) error {
 	}
 	c.HTTP = &http.Client{Timeout: 60 * time.Second}
 	c.Backoff = time.Second
-	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: version}, &mcp.ServerOptions{Instructions: instructions})
+	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: version}, &mcp.ServerOptions{Instructions: instructions + updateNotice(ctx)})
 	registerTools(s, c)
 	return s.Run(ctx, &mcp.StdioTransport{})
 }

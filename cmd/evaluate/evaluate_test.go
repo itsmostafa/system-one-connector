@@ -627,3 +627,30 @@ func TestNonJSONSuccessIsError(t *testing.T) {
 		t.Errorf("IsError=%v, text=%q", isErr, text)
 	}
 }
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestUpdateNotice(t *testing.T) {
+	origClient, origVersion := updateClient, version
+	t.Cleanup(func() { updateClient, version = origClient, origVersion })
+	updateClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"tag_name":"v9.9.9"}`))}, nil
+	})}
+
+	for _, tc := range []struct{ version, wantSub string }{
+		{"dev", ""},
+		{"v9.9.9", ""},
+		{"v10.0.0", ""},
+		{"v9.9.10-0.20260101000000-abcdef123456", ""},
+		{"v9.9.8", "evaluate v9.9.9 is available (running v9.9.8)"},
+		{"v0.1.0", "evaluate v9.9.9 is available (running v0.1.0)"},
+	} {
+		version = tc.version
+		got := updateNotice(context.Background())
+		if (tc.wantSub == "") != (got == "") || !strings.Contains(got, tc.wantSub) {
+			t.Errorf("version %s: updateNotice() = %q, want containing %q", tc.version, got, tc.wantSub)
+		}
+	}
+}

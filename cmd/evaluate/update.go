@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 )
@@ -138,6 +139,42 @@ func runUpdate(ctx context.Context) error {
 
 	fmt.Printf("Updated to %s. Run `evaluate version` to confirm.\n", release.TagName)
 	return nil
+}
+
+// updateNotice returns an instructions line announcing a newer release, or ""
+// for a dev build, an up-to-date or newer one, or a slow or unreachable GitHub.
+func updateNotice(ctx context.Context) string {
+	if _, ok := parseVersion(version); !ok {
+		return ""
+	}
+	// The check delays server startup, so it gets a tight budget.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	rel, err := fetchLatestRelease(ctx)
+	if err != nil || !newerRelease(rel.TagName) {
+		return ""
+	}
+	return fmt.Sprintf("\nUpdate: evaluate %s is available (running %s). Tell the user once: run `evaluate update` in a terminal, then restart this app.", rel.TagName, version)
+}
+
+// newerRelease reports whether tag is later than the running version; a dev
+// build takes any release. A tag goes public before its draft release is
+// published, so a go install can run ahead of releases/latest: no downgrade.
+func newerRelease(tag string) bool {
+	latest, ok := parseVersion(tag)
+	if !ok {
+		return false
+	}
+	current, ok := parseVersion(version)
+	return !ok || slices.Compare(latest[:], current[:]) > 0
+}
+
+// parseVersion reads the major, minor and patch numbers of a vX.Y.Z version,
+// ignoring any suffix, so a pseudo-version counts as its base release.
+func parseVersion(v string) ([3]int, bool) {
+	var p [3]int
+	n, _ := fmt.Sscanf(v, "v%d.%d.%d", &p[0], &p[1], &p[2])
+	return p, n == 3
 }
 
 type githubRelease struct {

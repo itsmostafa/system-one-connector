@@ -13,7 +13,7 @@ Tests all sit in `evaluate_test.go`, table-driven over `httptest`.
 
 ## Constraints
 
-- `instructions` in `main.go` is served as the MCP server instructions *and* baked into the pi extension, so editing it there covers both. The tool description and the `jsonschema` field descriptions in `tools.go` do **not** flow: `pi.ts` hand-copies them as TypeBox descriptions. Change those strings in lockstep.
+- `instructions` in `main.go` is served as the MCP server instructions *and* baked into the pi extension, so editing it there covers both. Only the MCP server appends `updateNotice` (a newer-release line) at startup; pi never sees it. The tool description and the `jsonschema` field descriptions in `tools.go` do **not** flow: `pi.ts` hand-copies them as TypeBox descriptions. Change those strings in lockstep.
 - Every line of `instructions` is one guideline: `pi.ts` splits the const on newlines, so a bullet wrapped across two physical lines ships as two broken guidelines.
 - Stdout of `evaluate mcp` carries the MCP protocol; diagnostics go to stderr.
 - `route` prefers `TYPESAFE_API_KEY` over `OPENROUTER_API_KEY`, so a stray OpenRouter key cannot re-bill an existing setup. An explicit `model` passes through unmapped, whichever route is live.
