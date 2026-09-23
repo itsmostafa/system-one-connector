@@ -66,7 +66,7 @@ Score answers are 0-indexed: N levels score from `0` to `N-1`. So `3.87` over 5 
 `items` has no counterpart in the TypeSafe API. It lets one tool call ask the same questions about many records:
 
 - The tool sends one request per item, with state `{"item": <record>, "context": <state>}`. `context` is included only when `state` is set.
-- A call accepts at most 100 items, and at most 8 requests run at once.
+- A call accepts at most 500 items, and at most 8 requests run at once. They all come back in one response.
 - The result is `{"results": {id: response}, "errors": {id: message}, "meta": {...}}`. `errors` is always present, empty when every item succeeded.
 - `meta` reports the call once: `model`, `input_tokens` and `output_tokens` summed over the items that succeeded, `item_count` (items sent), and `latency_ms` (wall clock for the whole call). Each item response leaves out its own `model` and `usage`; set `include_item_usage: true` to keep them.
 - If one item fails, it appears in `errors` and the other items still complete. The tool call itself fails only when every item fails.

@@ -165,7 +165,7 @@ export default function (pi: ExtensionAPI) {
           {},
           {
             description:
-              `optional map of item id to that item's state; asks the same questions of each item in its own request, so items are judged independently and cannot see each other; at most 100 items per call. Each request's state is {"item": <the item>} plus {"context": state} when state is set, so instructions reference fields like item.subject and context.user_goals. The result is {"results": {id: response}, "errors": {id: message}, "meta": {model, input_tokens, output_tokens, item_count, latency_ms}}, where meta totals usage over the call and each response omits its own model and usage unless include_item_usage is set; item ids are not sent to the model`,
+              `optional map of item id to that item's state; asks the same questions of each item in its own request, so items are judged independently and cannot see each other; at most 500 items per call. Each request's state is {"item": <the item>} plus {"context": state} when state is set, so instructions reference fields like item.subject and context.user_goals. The result is {"results": {id: response}, "errors": {id: message}, "meta": {model, input_tokens, output_tokens, item_count, latency_ms}}, where meta totals usage over the call and each response omits its own model and usage unless include_item_usage is set; item ids are not sent to the model`,
             additionalProperties: Type.Any(),
           },
         ),

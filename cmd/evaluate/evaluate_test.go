@@ -558,7 +558,7 @@ func TestItems(t *testing.T) {
 	for _, tc := range []struct{ name, args, want string }{
 		{"neither state nor items", `{` + q + `}`, "state or items is required"},
 		{"empty items", `{` + q + `,"items":{}}`, "items must not be empty"},
-		{"too many items", `{` + q + `,"items":{` + tooMany + `}}`, "exceeds the limit of 100"},
+		{"too many items", `{` + q + `,"items":{` + tooMany + `}}`, fmt.Sprintf("exceeds the limit of %d", maxItems)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			text, isErr := call(tc.args)
@@ -770,6 +770,23 @@ func TestMinConfidence(t *testing.T) {
 		if text, isErr := call(`{"state":"s","questions":{"q":` + tc.q + `}}`); !isErr || !strings.Contains(text, tc.want) {
 			t.Errorf("IsError=%v, text=%q, want %q", isErr, text, tc.want)
 		}
+	}
+}
+
+// A full batch fans out and comes back as one response.
+func TestItemsAtLimit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"answers":{"q":{"type":"noul","noul":0.9}}}`))
+	}))
+	defer srv.Close()
+	ids := make([]string, maxItems)
+	for i := range ids {
+		ids[i] = fmt.Sprintf(`"e%d":{}`, i)
+	}
+	text, isErr := connectEvaluate(t, srv)(`{"questions":{"q":{"type":"noul","instructions":"i"}},"items":{` + strings.Join(ids, ",") + `}}`)
+	var out struct{ Results map[string]json.RawMessage }
+	if isErr || json.Unmarshal([]byte(text), &out) != nil || len(out.Results) != maxItems {
+		t.Fatalf("IsError=%v, %d results, want %d: %.200s", isErr, len(out.Results), maxItems, text)
 	}
 }
 
