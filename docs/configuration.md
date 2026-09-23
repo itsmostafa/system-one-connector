@@ -61,6 +61,7 @@ TYPESAFE_API_KEY=your-key TYPESAFE_BASE_URL=https://jev.internal evaluate setup 
 - Set only the host: `evaluate` appends `/v1/systemone`. A trailing slash is fine.
 - The value must be an absolute `http` or `https` URL. `evaluate setup` rejects anything else rather than writing a broken endpoint into your client configs.
 - It has no effect on the OpenRouter route.
+- It also works with a local server that implements `POST /v1/systemone`, such as one serving Laya. `TYPESAFE_API_KEY` must still be set, since it is what selects this route. Use whatever key your server expects; if it doesn't check keys, any non-empty value such as `local` works.
 
 ## `evaluate setup mcp`
 
