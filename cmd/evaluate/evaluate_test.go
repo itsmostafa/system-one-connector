@@ -717,6 +717,62 @@ func TestItemsMeta(t *testing.T) {
 	}
 }
 
+// min_confidence is applied here, never sent upstream: below it a choice
+// becomes the abstain sentinel and a noul is flagged, with probabilities kept.
+func TestMinConfidence(t *testing.T) {
+	var body string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		w.Write([]byte(`{"answers":{` +
+			`"lo":{"type":"choice","choice":"a","confidence":0.28,"probabilities":{"a":0.46,"b":0.54}},` +
+			`"hi":{"type":"choice","choice":"a","confidence":0.94,"probabilities":{"a":0.97,"b":0.03}},` +
+			`"n":{"type":"noul","noul":0.6},` +
+			`"plain":{"type":"choice","choice":"a","confidence":0.1,"probabilities":{"a":0.55,"b":0.45}}}}`))
+	}))
+	defer srv.Close()
+	call := connectEvaluate(t, srv)
+	choice := func(min string) string {
+		return `{"type":"choice","instructions":"i","criteria":{"a":null,"b":null}` + min + `}`
+	}
+	text, isErr := call(`{"state":"s","questions":{` +
+		`"lo":` + choice(`,"min_confidence":0.5`) + `,"hi":` + choice(`,"min_confidence":0.5`) +
+		`,"n":{"type":"noul","instructions":"i","min_confidence":0.3},"plain":` + choice("") + `}}`)
+	if isErr {
+		t.Fatalf("tool error: %s", text)
+	}
+	if strings.Contains(body, "min_confidence") {
+		t.Errorf("min_confidence forwarded upstream: %s", body)
+	}
+	var out struct{ Answers map[string]map[string]any }
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatal(err)
+	}
+	a := out.Answers
+	if a["lo"]["choice"] != "__uncertain__" || a["lo"]["uncertain"] != true || a["lo"]["probabilities"] == nil {
+		t.Errorf("lo = %v, want abstention with probabilities", a["lo"])
+	}
+	// |2*0.6-1| = 0.2 < 0.3
+	if a["n"]["uncertain"] != true || a["n"]["noul"] != 0.6 {
+		t.Errorf("n = %v, want flagged with noul kept", a["n"])
+	}
+	for _, id := range []string{"hi", "plain"} {
+		if a[id]["choice"] != "a" || a[id]["uncertain"] != nil {
+			t.Errorf("%s = %v, want untouched", id, a[id])
+		}
+	}
+
+	for _, tc := range []struct{ q, want string }{
+		{`{"type":"score","instructions":"i","criteria":["x","y"],"min_confidence":0.5}`, "only noul and choice"},
+		{choice(`,"min_confidence":1.5`), "between 0 and 1"},
+		{`{"type":"choice","instructions":"i","criteria":{"__uncertain__":null},"min_confidence":0.5}`, "reserved"},
+	} {
+		if text, isErr := call(`{"state":"s","questions":{"q":` + tc.q + `}}`); !isErr || !strings.Contains(text, tc.want) {
+			t.Errorf("IsError=%v, text=%q, want %q", isErr, text, tc.want)
+		}
+	}
+}
+
 // connectEvaluate registers the evaluate tool against srv and connects an MCP
 // client to it in memory, returning a call that yields the tool's text and
 // whether it was an error result.

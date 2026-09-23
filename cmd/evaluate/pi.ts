@@ -151,6 +151,12 @@ export default function (pi: ExtensionAPI) {
                   'noul: optional {"true": ..., "false": ...} descriptions; choice (required): map of option to description or null; score (required): ordered array of at least 2 level descriptions, e.g. ["poor", "fair", "good"] — an array, not the index-keyed object the response legend comes back as',
               }),
             ),
+            min_confidence: Type.Optional(
+              Type.Number({
+                description:
+                  `noul and choice only: abstain threshold from 0 to 1, applied by this server and not sent to the model; when the answer's confidence (choice: the API's confidence; noul: |2p−1|, the same formula with two outcomes) is below it, the answer gains "uncertain": true and a choice becomes "__uncertain__"; probabilities are kept`,
+              }),
+            ),
           }),
         },
       ),

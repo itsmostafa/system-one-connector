@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -46,7 +47,12 @@ type question struct {
 	Type         string `json:"type" jsonschema:"noul (probability a yes/no condition holds), choice (one option from the criteria map), or score (probability-weighted position on ordered criteria levels)"`
 	Instructions any    `json:"instructions" jsonschema:"the judgment to make, with its full meaning; a string, or an object/array for definitions, contrasts, and examples; name the condition to test, not the conclusion you expect"`
 	Criteria     any    `json:"criteria,omitempty" jsonschema:"noul: optional {\"true\": ..., \"false\": ...} descriptions; choice (required): map of option to description or null; score (required): ordered array of at least 2 level descriptions, e.g. [\"poor\", \"fair\", \"good\"] — an array, not the index-keyed object the response legend comes back as"`
+
+	MinConfidence *float64 `json:"min_confidence,omitempty" jsonschema:"noul and choice only: abstain threshold from 0 to 1, applied by this server and not sent to the model; when the answer's confidence (choice: the API's confidence; noul: |2p−1|, the same formula with two outcomes) is below it, the answer gains \"uncertain\": true and a choice becomes \"__uncertain__\"; probabilities are kept"`
 }
+
+// abstain is the choice a min_confidence question returns below its threshold.
+const abstain = "__uncertain__"
 
 type evaluateIn struct {
 	State     any                 `json:"state,omitempty" jsonschema:"content to judge: plain text, or a JSON object/array with named fields — observed evidence and background as named fields, not your verdict about it; optional with items, where it is sent to every item as context"`
@@ -120,7 +126,7 @@ func registerTools(s *mcp.Server, c *Client) {
 			if err != nil {
 				return nil, err
 			}
-			return shape(b, order), nil
+			return shape(b, in.Questions, order), nil
 		}
 		return evaluateItems(ctx, c, in, qs, order)
 	})
@@ -178,9 +184,10 @@ func keyOrder(raw json.RawMessage) []string {
 // order: a choice's in its criteria order, a score's by level. The API emits
 // choice probabilities in no fixed order, so without this two items asked the
 // same question list their options differently. Every other field keeps its
-// bytes, though Go re-marshals object keys alphabetically. A reply that is not
-// the expected shape passes through unchanged: it is still the API's answer.
-func shape(b []byte, order map[string][]string) []byte {
+// bytes, though Go re-marshals object keys alphabetically. It also applies each
+// question's min_confidence. A reply that is not the expected shape passes
+// through unchanged: it is still the API's answer.
+func shape(b []byte, questions map[string]question, order map[string][]string) []byte {
 	var top map[string]json.RawMessage
 	var answers map[string]map[string]json.RawMessage
 	if json.Unmarshal(b, &top) != nil || json.Unmarshal(top["answers"], &answers) != nil || answers == nil {
@@ -190,6 +197,12 @@ func shape(b []byte, order map[string][]string) []byte {
 		for _, f := range []string{"probabilities", "legend"} {
 			if v, ok := a[f]; ok {
 				a[f] = ordered(v, order[id])
+			}
+		}
+		if q := questions[id]; q.MinConfidence != nil && lowConfidence(a, *q.MinConfidence) {
+			a["uncertain"] = json.RawMessage("true")
+			if _, ok := a["choice"]; ok {
+				a["choice"], _ = marshal(abstain)
 			}
 		}
 	}
@@ -211,6 +224,20 @@ func marshal(v any) ([]byte, error) {
 		return nil, err
 	}
 	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
+}
+
+// lowConfidence reports whether an answer's confidence is below min: a choice's
+// as the API computed it, a noul's as |2p−1|, which is the same statistic for
+// two outcomes. An answer carrying neither is left alone.
+func lowConfidence(a map[string]json.RawMessage, min float64) bool {
+	var c float64
+	if json.Unmarshal(a["confidence"], &c) == nil {
+		return c < min
+	}
+	if json.Unmarshal(a["noul"], &c) == nil {
+		return math.Abs(2*c-1) < min
+	}
+	return false
 }
 
 // ordered re-emits a JSON object with the keys in want first, in that order,
@@ -290,7 +317,7 @@ func evaluateItems(ctx context.Context, c *Client, in evaluateIn, qs map[string]
 				u     itemUsage
 			)
 			if err == nil {
-				b, model, u = splitUsage(shape(b, order), in.IncludeItemUsage)
+				b, model, u = splitUsage(shape(b, in.Questions, order), in.IncludeItemUsage)
 			}
 			mu.Lock()
 			defer mu.Unlock()
@@ -337,6 +364,19 @@ func evaluateItems(ctx context.Context, c *Client, in evaluateIn, qs map[string]
 // rule, because the API accepts one level.
 func validate(in evaluateIn) error {
 	for id, q := range in.Questions {
+		if m := q.MinConfidence; m != nil {
+			switch {
+			case q.Type != "noul" && q.Type != "choice":
+				return fmt.Errorf("questions[%q].min_confidence: only noul and choice questions take min_confidence, got %s", id, q.Type)
+			case *m < 0 || *m > 1:
+				return fmt.Errorf("questions[%q].min_confidence: must be between 0 and 1, got %v", id, *m)
+			}
+			if c, ok := q.Criteria.(map[string]any); ok && q.Type == "choice" {
+				if _, clash := c[abstain]; clash {
+					return fmt.Errorf("questions[%q].criteria: option %q is reserved for min_confidence abstentions", id, abstain)
+				}
+			}
+		}
 		var want string
 		switch q.Type {
 		case "score":
