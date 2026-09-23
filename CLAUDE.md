@@ -1,6 +1,6 @@
 # typesafe-mcp
 
-`evaluate`: a Go MCP stdio server that forwards typed questions to TypeSafe's Jev model. One static binary, no runtime dependencies. README.md is the user-facing doc; code notes live in `cmd/evaluate/CLAUDE.md` — read it before editing under `cmd/`.
+`evaluate`: a Go MCP stdio server that forwards typed questions to TypeSafe's Jev model. One static binary, no runtime dependencies. README.md is the user-facing pitch and `docs/` holds the user-facing reference (configuration, tool reference, development); code notes live in `cmd/evaluate/CLAUDE.md` — read it before editing under `cmd/`.
 
 ## Workflow
 
