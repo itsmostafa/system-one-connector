@@ -19,11 +19,11 @@ Question IDs are not sent to the model, so `instructions` must state the full qu
 |---|---|---|
 | `noul` | Probability that a yes/no condition holds | Optional: `{"true": ..., "false": ...}` descriptions |
 | `choice` | One option from a set, with a probability for each | Required: map of option to description (or `null`) |
-| `score` | Probability-weighted position on ordered levels | Required: array of at least 2 level descriptions, lowest first |
+| `score` | Probability-weighted position on ordered levels | Required: array of level descriptions, lowest first |
 
-A `choice` or `score` question can have at most 255 options.
+A `choice` or `score` question can have at most 255 options. Give a `score` at least 2 levels: one level is a valid request but can only ever score `0`. This is guidance, not a rule; `evaluate` does not reject a one-level score, because the API accepts it.
 
-`evaluate` checks criteria locally and rejects malformed ones before sending a request. The error names the field path you sent. It also rejects two inputs that the API mishandles:
+`evaluate` checks the shape of criteria locally (an object for `noul` and `choice`, an array for `score`) and rejects malformed ones before sending a request. The error names the field path you sent. It also rejects two inputs that the API mishandles:
 
 - An unknown question type. The API answers only "Invalid request."
 - `noul` criteria keys other than `true` and `false`. The API drops them without an error.
