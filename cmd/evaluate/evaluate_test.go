@@ -318,21 +318,42 @@ func TestPiDir(t *testing.T) {
 func TestValidate(t *testing.T) {
 	obj := map[string]any{"0": "low", "1": "high"}
 	arr := []any{"low", "high"}
+	maxLevels := make([]any, maxScoreLevels)
+	tooManyLevels := make([]any, maxScoreLevels+1)
+	for i := range tooManyLevels {
+		tooManyLevels[i] = fmt.Sprintf("level %d", i)
+		if i < len(maxLevels) {
+			maxLevels[i] = tooManyLevels[i]
+		}
+	}
+	maxOptions := make(map[string]any, maxChoiceOptions)
+	tooManyOptions := make(map[string]any, maxChoiceOptions+1)
+	for i := 0; i <= maxChoiceOptions; i++ {
+		option := fmt.Sprintf("option %d", i)
+		tooManyOptions[option] = "description"
+		if i < maxChoiceOptions {
+			maxOptions[option] = "description"
+		}
+	}
 	for _, tc := range []struct {
 		name string
 		q    question
 		want string
 	}{
-		{"score object", question{Type: "score", Criteria: obj}, `questions["q"].criteria: score criteria must be an array of level descriptions, ordered low to high, got an object`},
+		{"score object", question{Type: "score", Criteria: obj}, `questions["q"].criteria: score criteria must be an array of 1 to 10 level descriptions, ordered low to high, got an object`},
 		{"score missing", question{Type: "score"}, "got nothing"},
 		{"score string", question{Type: "score", Criteria: "high"}, "got a string"},
-		{"choice array", question{Type: "choice", Criteria: arr}, `questions["q"].criteria: choice criteria must be an object`},
+		{"choice array", question{Type: "choice", Criteria: arr}, `questions["q"].criteria: choice criteria must be an object mapping 1 to 255 options to a description or null, got an array`},
 		{"noul array", question{Type: "noul", Criteria: arr}, `questions["q"].criteria: noul criteria must be an object`},
 
 		{"score array", question{Type: "score", Criteria: arr}, ""},
 		// One level is accepted by the API, so it must not be rejected here.
 		{"score one level", question{Type: "score", Criteria: []any{"only"}}, ""},
+		{"score at limit", question{Type: "score", Criteria: maxLevels}, ""},
+		{"score over limit", question{Type: "score", Criteria: tooManyLevels}, fmt.Sprintf(`score criteria has %d levels; maximum is %d`, maxScoreLevels+1, maxScoreLevels)},
 		{"choice object", question{Type: "choice", Criteria: obj}, ""},
+		{"choice at limit", question{Type: "choice", Criteria: maxOptions}, ""},
+		{"choice over limit", question{Type: "choice", Criteria: tooManyOptions}, fmt.Sprintf(`choice criteria has %d options; maximum is %d`, maxChoiceOptions+1, maxChoiceOptions)},
 		{"noul true/false", question{Type: "noul", Criteria: map[string]any{"true": "y", "false": "n"}}, ""},
 		{"noul omitted", question{Type: "noul"}, ""},
 		// The API silently drops these keys, so the criteria would do nothing.
@@ -397,6 +418,22 @@ func TestValidateBlocksRequest(t *testing.T) {
 	defer srv.Close()
 
 	call := connectEvaluate(t, srv)
+	tooManyLevels := make([]string, maxScoreLevels+1)
+	for i := range tooManyLevels {
+		tooManyLevels[i] = fmt.Sprintf("level %d", i)
+	}
+	levelsJSON, err := json.Marshal(tooManyLevels)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tooManyOptions := make(map[string]string, maxChoiceOptions+1)
+	for i := 0; i <= maxChoiceOptions; i++ {
+		tooManyOptions[fmt.Sprintf("option %d", i)] = "description"
+	}
+	optionsJSON, err := json.Marshal(tooManyOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for _, tc := range []struct {
 		name, criteria, qtype, wantErr string
@@ -408,6 +445,8 @@ func TestValidateBlocksRequest(t *testing.T) {
 		{"score array", `["low","high"]`, "score", "", 1},
 		// The API accepts one level, so this must not be rejected locally.
 		{"score one level", `["only"]`, "score", "", 1},
+		{"score over limit", string(levelsJSON), "score", "maximum is 10", 0},
+		{"choice over limit", string(optionsJSON), "choice", "maximum is 255", 0},
 		{"unknown type", `{"0":"low"}`, "bounding_box", `questions["q"].type`, 0},
 	} {
 		calls = 0
