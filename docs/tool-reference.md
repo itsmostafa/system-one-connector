@@ -1,6 +1,6 @@
 # Tool reference
 
-`evaluate` exposes one MCP tool, also named `evaluate`. It sends state and typed questions to Jev and returns the API's response JSON unchanged. For the full API contract, see https://docs.typesafe.ai/api.
+`evaluate` exposes one MCP tool, also named `evaluate`. It sends state and typed questions to Jev and returns the API's response with its values intact, except that it lists each `probabilities` map in criteria order (a score's levels and `legend` by index), applies [`min_confidence`](#input), and in items mode moves `model` and `usage` into [`meta`](#many-records-items). For the full API contract, see https://docs.typesafe.ai/api.
 
 ## Input
 
@@ -10,6 +10,22 @@
 | `questions` | yes | Map of question ID to `{type, instructions, criteria?}`. Answers come back under the same IDs. |
 | `items` | no | Map of item ID to record. Each record is judged separately. See [Many records](#many-records-items). |
 | `model` | no | Defaults to `jev-latest`, or `~typesafe/jev-latest` on OpenRouter. |
+| `include_item_usage` | no | With `items`, keep each item response's own `model` and `usage`. Default `false`: they are reported once in `meta`. |
+
+A `noul` or `choice` question can also set `min_confidence` (0 to 1), which lets it abstain. `evaluate` applies it and never sends it to the API. When the answer's confidence is below the threshold, the answer gains `"uncertain": true`, and a `choice` answer's `choice` becomes `"__uncertain__"`. Confidence here is the API's `confidence` for a choice and `|2p − 1|` for a noul, which is the same formula with two outcomes. `probabilities` and the `noul` value are kept, so you can still read what Jev leaned toward. `__uncertain__` is reserved and cannot be used as an option name.
+
+Send evidence, not conclusions. A field that states your own reading of the evidence pulls the answer toward it, and the confidence that comes back then only agrees with you:
+
+```json
+// Evidence: Jev judges whether the user replied.
+{"thread": [
+  {"from": "agent", "at": "2026-09-01T10:00Z", "text": "Can you send the invoice?"},
+  {"from": "user",  "at": "2026-09-01T12:30Z", "text": "Attached."}
+]}
+
+// Editorialized: the note answers the question for Jev.
+{"thread": [...], "note": "user already replied"}
+```
 
 Question IDs are not sent to the model, so `instructions` must state the full question on its own. `instructions` can be a string, or an object or array when definitions, contrasts or examples make the question clearer. To refer to a nested field in `state`, use a backticked path such as `` `ticket.messages[0].text` ``.
 
@@ -17,7 +33,7 @@ Question IDs are not sent to the model, so `instructions` must state the full qu
 
 | Type | Answers | `criteria` |
 |---|---|---|
-| `noul` | Probability that a yes/no condition holds | Optional: `{"true": ..., "false": ...}` descriptions |
+| `noul` | Probability that a yes/no condition holds. `noul` is TypeSafe's name for this type, not a typo for `bool`; any other type, such as `bool`, is rejected with a pointer to `noul` | Optional: `{"true": ..., "false": ...}` descriptions |
 | `choice` | One option from a set, with a probability for each | Required: map of option to description (or `null`) |
 | `score` | Probability-weighted position on ordered levels | Required: array of level descriptions, lowest first |
 
@@ -32,7 +48,11 @@ A `choice` or `score` question can have at most 255 options. Give a `score` at l
 
 A `noul` answer near 0.5 means Jev is unsure. It does not mean "somewhat true".
 
-`choice` and `score` answers include a `confidence` value. It measures how concentrated the probability distribution is. It does not measure whether the answer is correct.
+`choice` and `score` answers include a `confidence` value from 0 to 1. The API computes it from how the probabilities are spread, and `evaluate` passes it through unchanged. It measures how concentrated the distribution is, not whether the answer is correct, and it is not the chosen option's probability:
+
+- For `choice` over N options, `confidence = (N·p_top − 1) / (N − 1)`. It is 0 when every option is equally likely and 1 when one option has all the probability. With two options it equals `p_top − p_second`, so 0.78/0.22 gives 0.56. The docs example below has 0.86/0.14/0.0, which gives 0.79.
+- For `score`, TypeSafe does not publish a formula. A single peak on one level gives high confidence, and probability spread across levels gives low confidence.
+- `noul` answers have no `confidence`. Read the `noul` probability itself: values near 0 or 1 are confident, and values near 0.5 are not.
 
 Score answers are 0-indexed: N levels score from `0` to `N-1`. So `3.87` over 5 levels sits between levels 3 and 4; it is not 3.87 out of 5. The response includes a `legend` that maps each index to its level and a `probabilities` entry for each level.
 
@@ -59,8 +79,9 @@ Score answers are 0-indexed: N levels score from `0` to `N-1`. So `3.87` over 5 
 `items` has no counterpart in the TypeSafe API. It lets one tool call ask the same questions about many records:
 
 - The tool sends one request per item, with state `{"item": <record>, "context": <state>}`. `context` is included only when `state` is set.
-- A call accepts at most 100 items, and at most 8 requests run at once.
-- The result is `{"results": {id: response}, "errors": {id: message}}`.
+- A call accepts at most 500 items, and at most 8 requests run at once. They all come back in one response.
+- The result is `{"results": {id: response}, "errors": {id: message}, "meta": {...}}`. `errors` is always present, empty when every item succeeded.
+- `meta` reports the call once: `model`, `input_tokens` and `output_tokens` summed over the items that succeeded, `item_count` (items sent), and `latency_ms` (wall clock for the whole call). Each item response leaves out its own `model` and `usage`; set `include_item_usage: true` to keep them.
 - If one item fails, it appears in `errors` and the other items still complete. The tool call itself fails only when every item fails.
 - All responses in a batch together must stay under 16 MiB. Once that limit is reached, the remaining results are dropped and appear in `errors`. Split large batches across several calls.
 

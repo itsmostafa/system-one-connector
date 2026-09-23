@@ -38,9 +38,9 @@ const instructions = `The evaluate tool runs Jev, a TypeSafe System One model th
 - Jev reads literally and is not a calculator: state the exact condition, put boundary cases in criteria, and keep counting, arithmetic, and date comparison in code.
 - Send only the state the question needs: unrelated detail costs accuracy, and instructions embedded in state can steer the answer.
 - Batch independent questions over the same state into one call; they run in parallel and cannot see each other's answers.
-- To ask the same questions of many records, pass them as items (id → record, up to 100 per call) instead of repeating each question per record; each item is judged independently.
+- To ask the same questions of many records, pass them as items (id → record, up to 500 per call) instead of repeating each question per record; each item is judged independently.
 - Include a no-match option in a choice when nothing may fit. Score levels must describe concrete situations.
-- A noul near 0.5 means uncertain, not medium intensity. Confidence measures how concentrated the distribution is, not correctness.
+- A noul near 0.5 means uncertain, not medium intensity. Confidence (choice and score only) measures how concentrated the probabilities are, not correctness, and is not the chosen option's probability: for choice it is (N·p_top−1)/(N−1) over N options, so p_top−p_second with two.
 - Jev returns no reasoning. To audit a low-confidence or near-0.5 answer, read its full probabilities, re-ask it as narrower nouls about the specific evidence, or escalate to a reasoning model or a human instead of acting.
 - Score criteria are an ordered array; the answer is 0-indexed, so N levels score 0 to N-1. A 3.87 over 5 levels sits between levels 3 and 4, not 3.87/5. Report it with the labels from the response ` + "`legend`" + `, and read ` + "`probabilities`" + ` alongside it.
 Docs: https://docs.typesafe.ai/llms.txt`

@@ -113,13 +113,14 @@ export default function (pi: ExtensionAPI) {
     label: "Jev",
     description:
       "Jev is a fast structured-decision model: unstructured state in, typed answers " +
-      "(noul, choice, score) with calibrated confidence out; 70-500ms, schema-enforced. " +
+      "(noul, choice, score) with probabilities out; 70-500ms, schema-enforced. " +
+      "noul is TypeSafe's name for a yes/no question (not a typo for bool): it returns the probability that the condition holds. Choice and score answers carry a 0-1 confidence computed from the spread of their probabilities, not the chosen option's probability: for choice it is (N·p_top−1)/(N−1) over N options, which is p_top−p_second with two; TypeSafe publishes no formula for score; noul has none, so read the noul probability itself. " +
       "Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
       "and mapping one question set over many records via items — wherever hand-written logic is too brittle or latency matters. " +
       "Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options). " +
-      "Pass raw evidence as state, not your read of it — a conclusion asserted in state biases the answer toward it, and the confidence is then not independent corroboration.",
+      "Pass raw evidence as state, not your read of it — a conclusion asserted in state biases the answer toward it, and the confidence is then not independent corroboration. E.g. to ask whether a ticket needs a follow-up, send the thread's messages with their senders and timestamps, not the thread plus a note field saying 'user already replied'.",
     promptSnippet:
-      "Classify, route, score, extract, or guard with Jev: typed answers and calibrated confidence to branch on, in 70-500ms, instead of parsing prose.",
+      "Classify, route, score, extract, or guard with Jev: typed answers and probabilities to branch on, in 70-500ms, instead of parsing prose.",
     // filter: an empty INSTRUCTIONS must not inject a blank guideline.
     promptGuidelines: INSTRUCTIONS.split("\n").filter(Boolean),
     parameters: Type.Object({
@@ -150,6 +151,12 @@ export default function (pi: ExtensionAPI) {
                   'noul: optional {"true": ..., "false": ...} descriptions; choice (required): map of option to description or null; score (required): ordered array of at least 2 level descriptions, e.g. ["poor", "fair", "good"] — an array, not the index-keyed object the response legend comes back as',
               }),
             ),
+            min_confidence: Type.Optional(
+              Type.Number({
+                description:
+                  `noul and choice only: abstain threshold from 0 to 1, applied by this server and not sent to the model; when the answer's confidence (choice: the API's confidence; noul: |2p−1|, the same formula with two outcomes) is below it, the answer gains "uncertain": true and a choice becomes "__uncertain__"; probabilities are kept`,
+              }),
+            ),
           }),
         },
       ),
@@ -158,12 +165,18 @@ export default function (pi: ExtensionAPI) {
           {},
           {
             description:
-              `optional map of item id to that item's state; asks the same questions of each item in its own request, so items are judged independently and cannot see each other; at most 100 items per call. Each request's state is {"item": <the item>} plus {"context": state} when state is set, so instructions reference fields like item.subject and context.user_goals. The result is {"results": {id: response}, "errors": {id: message}}; item ids are not sent to the model`,
+              `optional map of item id to that item's state; asks the same questions of each item in its own request, so items are judged independently and cannot see each other; at most 500 items per call. Each request's state is {"item": <the item>} plus {"context": state} when state is set, so instructions reference fields like item.subject and context.user_goals. The result is {"results": {id: response}, "errors": {id: message}, "meta": {model, input_tokens, output_tokens, item_count, latency_ms}}, where meta totals usage over the call and each response omits its own model and usage unless include_item_usage is set; item ids are not sent to the model`,
             additionalProperties: Type.Any(),
           },
         ),
       ),
       model: Type.Optional(Type.String({ description: "model to use; defaults to the latest Jev on whichever endpoint is configured" })),
+      include_item_usage: Type.Optional(
+        Type.Boolean({
+          description:
+            "items only: keep each item response's own model and usage fields; by default they are dropped and reported once in meta",
+        }),
+      ),
     }),
     async execute(_toolCallId, params, signal) {
       return { content: [{ type: "text", text: await callEvaluate(params, signal) }], details: {} }

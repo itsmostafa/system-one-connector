@@ -72,7 +72,7 @@ And gets back:
 - **Confidence you can act on.** A 0.95 and a 0.55 lead to different actions. Your agent can proceed on confident answers and escalate unsure ones to you.
 - **Fast enough to call often.** Jev typically answers in under half a second.
 - **Many questions in one call.** Ask about urgency, ownership and sentiment together, and they run in parallel.
-- **Whole datasets in one call.** Pass up to 100 records as `items` and ask the same questions of each one. If one record fails, the rest still complete.
+- **Whole datasets in one call.** Pass up to 500 records as `items` and ask the same questions of each one. If one record fails, the rest still complete.
 - **Agents that use it well without extra prompting.** The server tells your agent how to write good questions (narrow judgments, structured state, evidence rather than conclusions).
 - **Setup in one command.** `evaluate setup mcp` configures every supported client it finds. Run it again to update.
 - **No dependencies.** One static binary with no Node or Python runtime. `evaluate update` upgrades it in place.

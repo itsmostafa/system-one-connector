@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 
@@ -339,6 +340,7 @@ func TestValidate(t *testing.T) {
 		{"noul yes/no", question{Type: "noul", Criteria: map[string]any{"yes": "y"}}, `noul criteria keys must be "true" or "false", got "yes"`},
 		// The API answers these with a bare "Invalid request.".
 		{"unknown type", question{Type: "yesno"}, `questions["q"].type: must be noul, choice, or score, got "yesno"`},
+		{"bool type", question{Type: "bool"}, `got "bool"; use "noul" for yes/no questions`},
 	} {
 		tc.q.Instructions = "x"
 		err := validate(evaluateIn{State: "s", Questions: map[string]question{"q": tc.q}})
@@ -497,6 +499,18 @@ func TestItems(t *testing.T) {
 		}
 	})
 
+	// The documented result shape carries errors even when nothing failed, so
+	// callers can read it without a presence check.
+	t.Run("errors present on success", func(t *testing.T) {
+		text, isErr := call(`{` + q + `,"items":{"e1":{"subject":"a"},"e2":{"subject":"b"}}}`)
+		if isErr {
+			t.Fatalf("tool error: %s", text)
+		}
+		if !strings.Contains(text, `"errors":{}`) {
+			t.Errorf("want \"errors\":{} in %s", text)
+		}
+	})
+
 	t.Run("no shared state", func(t *testing.T) {
 		clear(states)
 		text, isErr := call(`{` + q + `,"items":{"e1":{"subject":"a"}}}`)
@@ -545,7 +559,7 @@ func TestItems(t *testing.T) {
 	for _, tc := range []struct{ name, args, want string }{
 		{"neither state nor items", `{` + q + `}`, "state or items is required"},
 		{"empty items", `{` + q + `,"items":{}}`, "items must not be empty"},
-		{"too many items", `{` + q + `,"items":{` + tooMany + `}}`, "exceeds the limit of 100"},
+		{"too many items", `{` + q + `,"items":{` + tooMany + `}}`, fmt.Sprintf("exceeds the limit of %d", maxItems)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			text, isErr := call(tc.args)
@@ -583,6 +597,197 @@ func TestItemsAggregateCap(t *testing.T) {
 		if !strings.Contains(msg, "batch responses exceed") {
 			t.Errorf("error = %q", msg)
 		}
+	}
+}
+
+// The API lists choice probabilities in no fixed order, so the same question
+// over many items came back with its options shuffled. Every result must list
+// them in the order the caller wrote the criteria, and the criteria must reach
+// the API in that order too, not sorted alphabetically.
+func TestProbabilityOrder(t *testing.T) {
+	var (
+		mu     sync.Mutex
+		bodies []string
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		bodies = append(bodies, string(b))
+		mu.Unlock()
+		shuffled := func(pairs ...string) string {
+			rand.Shuffle(len(pairs), func(i, j int) { pairs[i], pairs[j] = pairs[j], pairs[i] })
+			return "{" + strings.Join(pairs, ",") + "}"
+		}
+		fmt.Fprintf(w, `{"model":"m","answers":{`+
+			`"c":{"type":"choice","choice":"zeta","confidence":0.4,"probabilities":%s},`+
+			`"s":{"type":"score","score":1.1,"confidence":0.6,"legend":%s,"probabilities":%s}},`+
+			`"usage":{"input_tokens":1,"output_tokens":1}}`,
+			shuffled(`"zeta":0.6`, `"alpha":0.3`, `"mid":0.1`),
+			shuffled(`"2":"high"`, `"0":"a < b"`, `"1":"mid"`, `"10":"top"`),
+			shuffled(`"2":0.2`, `"0":0.1`, `"1":0.6`, `"10":0.1`))
+	}))
+	defer srv.Close()
+
+	items := make([]string, 25)
+	for i := range items {
+		items[i] = fmt.Sprintf(`"i%d":{"n":%d}`, i, i)
+	}
+	text, isErr := connectEvaluate(t, srv)(`{"questions":{` +
+		`"c":{"type":"choice","instructions":"i","criteria":{"zeta":null,"alpha":"a","mid":null}},` +
+		`"s":{"type":"score","instructions":"i","criteria":["low","mid","high"]}},` +
+		`"items":{` + strings.Join(items, ",") + `}}`)
+	if isErr {
+		t.Fatalf("tool error: %s", text)
+	}
+	var out struct{ Results map[string]json.RawMessage }
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Results) != 25 {
+		t.Fatalf("%d results, want 25", len(out.Results))
+	}
+	for id, r := range out.Results {
+		var res struct {
+			Answers map[string]map[string]json.RawMessage
+		}
+		if err := json.Unmarshal(r, &res); err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range []struct {
+			q, field string
+			want     []string
+		}{
+			{"c", "probabilities", []string{"zeta", "alpha", "mid"}},
+			{"s", "probabilities", []string{"0", "1", "2", "10"}},
+			{"s", "legend", []string{"0", "1", "2", "10"}},
+		} {
+			if got := keyOrder(res.Answers[tc.q][tc.field]); !slices.Equal(got, tc.want) {
+				t.Errorf("%s: %s.%s keys = %v, want %v", id, tc.q, tc.field, got, tc.want)
+			}
+		}
+		if !strings.Contains(string(r), `"a < b"`) {
+			t.Errorf("%s: legend text re-escaped: %s", id, r)
+		}
+	}
+	for _, b := range bodies {
+		if !strings.Contains(b, `"criteria":{"zeta":null,"alpha":"a","mid":null}`) {
+			t.Fatalf("criteria not forwarded in caller order: %s", b)
+		}
+	}
+}
+
+// Model and usage are the same on every item, so items mode reports them once
+// in meta and strips them per item unless the caller opts back in.
+func TestItemsMeta(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"model":"jev-x","answers":{"q":{"type":"noul","noul":0.9}},"usage":{"input_tokens":10,"output_tokens":2}}`))
+	}))
+	defer srv.Close()
+	call := connectEvaluate(t, srv)
+	args := `{"questions":{"q":{"type":"noul","instructions":"i"}},"items":{"a":{},"b":{},"c":{}}`
+	for _, keep := range []bool{false, true} {
+		extra := ""
+		if keep {
+			extra = `,"include_item_usage":true`
+		}
+		text, isErr := call(args + extra + `}`)
+		if isErr {
+			t.Fatalf("tool error: %s", text)
+		}
+		var out struct {
+			Results map[string]map[string]json.RawMessage
+			Meta    map[string]any
+		}
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatal(err)
+		}
+		m := out.Meta
+		if m["model"] != "jev-x" || m["input_tokens"] != 30.0 || m["output_tokens"] != 6.0 || m["item_count"] != 3.0 {
+			t.Errorf("keep=%v: meta = %v", keep, m)
+		}
+		if _, ok := m["latency_ms"].(float64); !ok {
+			t.Errorf("keep=%v: latency_ms missing: %v", keep, m)
+		}
+		for id, r := range out.Results {
+			_, hasUsage := r["usage"]
+			_, hasModel := r["model"]
+			if hasUsage != keep || hasModel != keep || r["answers"] == nil {
+				t.Errorf("keep=%v: results[%s] = %v", keep, id, r)
+			}
+		}
+	}
+}
+
+// min_confidence is applied here, never sent upstream: below it a choice
+// becomes the abstain sentinel and a noul is flagged, with probabilities kept.
+func TestMinConfidence(t *testing.T) {
+	var body string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		w.Write([]byte(`{"answers":{` +
+			`"lo":{"type":"choice","choice":"a","confidence":0.28,"probabilities":{"a":0.46,"b":0.54}},` +
+			`"hi":{"type":"choice","choice":"a","confidence":0.94,"probabilities":{"a":0.97,"b":0.03}},` +
+			`"n":{"type":"noul","noul":0.6},` +
+			`"plain":{"type":"choice","choice":"a","confidence":0.1,"probabilities":{"a":0.55,"b":0.45}}}}`))
+	}))
+	defer srv.Close()
+	call := connectEvaluate(t, srv)
+	choice := func(min string) string {
+		return `{"type":"choice","instructions":"i","criteria":{"a":null,"b":null}` + min + `}`
+	}
+	text, isErr := call(`{"state":"s","questions":{` +
+		`"lo":` + choice(`,"min_confidence":0.5`) + `,"hi":` + choice(`,"min_confidence":0.5`) +
+		`,"n":{"type":"noul","instructions":"i","min_confidence":0.3},"plain":` + choice("") + `}}`)
+	if isErr {
+		t.Fatalf("tool error: %s", text)
+	}
+	if strings.Contains(body, "min_confidence") {
+		t.Errorf("min_confidence forwarded upstream: %s", body)
+	}
+	var out struct{ Answers map[string]map[string]any }
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatal(err)
+	}
+	a := out.Answers
+	if a["lo"]["choice"] != "__uncertain__" || a["lo"]["uncertain"] != true || a["lo"]["probabilities"] == nil {
+		t.Errorf("lo = %v, want abstention with probabilities", a["lo"])
+	}
+	// |2*0.6-1| = 0.2 < 0.3
+	if a["n"]["uncertain"] != true || a["n"]["noul"] != 0.6 {
+		t.Errorf("n = %v, want flagged with noul kept", a["n"])
+	}
+	for _, id := range []string{"hi", "plain"} {
+		if a[id]["choice"] != "a" || a[id]["uncertain"] != nil {
+			t.Errorf("%s = %v, want untouched", id, a[id])
+		}
+	}
+
+	for _, tc := range []struct{ q, want string }{
+		{`{"type":"score","instructions":"i","criteria":["x","y"],"min_confidence":0.5}`, "only noul and choice"},
+		{choice(`,"min_confidence":1.5`), "between 0 and 1"},
+		{`{"type":"choice","instructions":"i","criteria":{"__uncertain__":null},"min_confidence":0.5}`, "reserved"},
+	} {
+		if text, isErr := call(`{"state":"s","questions":{"q":` + tc.q + `}}`); !isErr || !strings.Contains(text, tc.want) {
+			t.Errorf("IsError=%v, text=%q, want %q", isErr, text, tc.want)
+		}
+	}
+}
+
+// A full batch fans out and comes back as one response.
+func TestItemsAtLimit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"answers":{"q":{"type":"noul","noul":0.9}}}`))
+	}))
+	defer srv.Close()
+	ids := make([]string, maxItems)
+	for i := range ids {
+		ids[i] = fmt.Sprintf(`"e%d":{}`, i)
+	}
+	text, isErr := connectEvaluate(t, srv)(`{"questions":{"q":{"type":"noul","instructions":"i"}},"items":{` + strings.Join(ids, ",") + `}}`)
+	var out struct{ Results map[string]json.RawMessage }
+	if isErr || json.Unmarshal([]byte(text), &out) != nil || len(out.Results) != maxItems {
+		t.Fatalf("IsError=%v, %d results, want %d: %.200s", isErr, len(out.Results), maxItems, text)
 	}
 }
 
