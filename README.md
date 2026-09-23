@@ -84,6 +84,7 @@ It gets back the raw response JSON, with each answer under the same id you gave 
 - **Answers your code can branch on.** Three question types: `noul` (probability a condition holds), `choice` (one option from a map), `score` (position on ordered levels).
 - **Rate limits handled for you.** 429 and 529 responses are retried with exponential backoff. Other API errors come back to the agent as tool errors it can read and act on.
 - **Several questions, one call.** Batch independent questions over the same state; they run in parallel.
+- **One question set, many records.** Pass `items` (id → record, up to 100) to ask the same questions of each record independently; a failed item is reported beside the others instead of failing the call.
 - **Agents that use it well out of the box.** The server ships usage guidance (narrow questions, JSON state, no-match options, evidence not verdicts) to the client, so the agent writes better questions without extra prompting.
 - **A single static binary.** No runtime, no Node, no Python. `evaluate update` upgrades it in place from a checksum-verified release. Read-only tool, 60s request timeout, responses over 16 MiB are rejected, never truncated.
 
@@ -97,8 +98,9 @@ It gets back the raw response JSON, with each answer under the same id you gave 
 
 | Field | Required | Description |
 |---|---|---|
-| `state` | yes | Content to judge: plain text, or a JSON object/array with named fields. Raw observed evidence, not your conclusion about it |
+| `state` | yes, unless `items` is set | Content to judge: plain text, or a JSON object/array with named fields. Observed evidence plus the background it is judged against (user goals, policies), not your conclusion about it. With `items`, it is sent to every item as `context` |
 | `questions` | yes | Map of question id to `{type, instructions, criteria?}` |
+| `items` | no | Map of item id to record. Each item is judged in its own request with state `{"item": <record>, "context": <state>}`; the result is `{"results": {id: response}, "errors": {id: message}}` |
 | `model` | no | Defaults to `jev-latest`, or `~typesafe/jev-latest` on OpenRouter |
 
 Criteria shape per question type, the 0-indexed score answers, and manual client config: [`cmd/evaluate/CLAUDE.md`](cmd/evaluate/CLAUDE.md). Malformed criteria are rejected locally, before the request, with the field path you sent. Full API docs: https://docs.typesafe.ai/api

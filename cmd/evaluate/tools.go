@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -42,15 +43,32 @@ type question struct {
 }
 
 type evaluateIn struct {
-	State     any                 `json:"state" jsonschema:"content to judge: plain text, or a JSON object/array with named fields; observed evidence or a faithful condensation of it, not your verdict about it"`
+	State     any                 `json:"state,omitempty" jsonschema:"content to judge: plain text, or a JSON object/array with named fields — observed evidence and background as named fields, not your verdict about it; optional with items, where it is sent to every item as context"`
 	Questions map[string]question `json:"questions" jsonschema:"map of question id to question; answers come back under the same ids, which are not sent to the model"`
+	Items     map[string]any      `json:"items,omitempty" jsonschema:"optional map of item id to that item's state; asks the same questions of each item in its own request, so items are judged independently and cannot see each other; at most 100 items per call. Each request's state is {\"item\": <the item>} plus {\"context\": state} when state is set, so instructions reference fields like item.subject and context.user_goals. The result is {\"results\": {id: response}, \"errors\": {id: message}}; item ids are not sent to the model"`
 	Model     string              `json:"model,omitempty" jsonschema:"model to use; defaults to the latest Jev on whichever endpoint is configured"`
 }
+
+// request is the body the API takes: evaluateIn minus items, which the API
+// has no field for.
+type request struct {
+	State     any                 `json:"state"`
+	Questions map[string]question `json:"questions"`
+	Model     string              `json:"model"`
+}
+
+// itemConcurrency bounds in-flight requests in items mode, so a large map does
+// not open a request per item at once and trip the rate limit.
+const itemConcurrency = 8
+
+// maxItems caps one call's fan-out. Every item is a billed request, and past a
+// few hundred the 429 retries of one call start starving the next.
+const maxItems = 100
 
 const toolDescription = "Jev is a fast structured-decision model: unstructured state in, typed answers " +
 	"(noul, choice, score) with calibrated confidence out; 70-500ms, schema-enforced. " +
 	"Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
-	"and map-reduce over large data — wherever hand-written logic is too brittle or latency matters. " +
+	"and mapping one question set over many records via items — wherever hand-written logic is too brittle or latency matters. " +
 	"Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options). " +
 	"Pass raw evidence as state, not your read of it — a conclusion asserted in state biases the answer toward it, and the confidence is then not independent corroboration."
 
@@ -60,8 +78,14 @@ func registerTools(s *mcp.Server, c *Client) {
 		Description: toolDescription,
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, in evaluateIn) ([]byte, error) {
-		if in.State == nil {
-			return nil, errors.New("state is required")
+		if in.State == nil && in.Items == nil {
+			return nil, errors.New("state or items is required")
+		}
+		if in.Items != nil && len(in.Items) == 0 {
+			return nil, errors.New("items must not be empty")
+		}
+		if len(in.Items) > maxItems {
+			return nil, fmt.Errorf("items: %d items exceeds the limit of %d per call; split them across calls", len(in.Items), maxItems)
 		}
 		if len(in.Questions) == 0 {
 			return nil, errors.New("questions must not be empty")
@@ -72,8 +96,67 @@ func registerTools(s *mcp.Server, c *Client) {
 		if in.Model == "" {
 			in.Model = c.Model
 		}
-		return c.Evaluate(ctx, in)
+		if in.Items == nil {
+			return c.Evaluate(ctx, request{in.State, in.Questions, in.Model})
+		}
+		return evaluateItems(ctx, c, in)
 	})
+}
+
+// evaluateItems asks in.Questions of every item in its own request, so no item
+// is judged with another in view; one combined state would both couple them and
+// dilute each judgment with the others' content. A failed item lands in errors
+// without cancelling its siblings, and only a total failure is a tool error.
+// maxBody bounds the whole batch, not just each reply: every stored result and
+// error counts against it, so 100 replies near the per-request cap cannot pile
+// up gigabytes. Once it is spent, later items keep only a short error.
+func evaluateItems(ctx context.Context, c *Client, in evaluateIn) ([]byte, error) {
+	var (
+		mu   sync.Mutex
+		wg   sync.WaitGroup
+		size int
+		sem  = make(chan struct{}, itemConcurrency)
+		out  = struct {
+			Results map[string]json.RawMessage `json:"results"`
+			Errors  map[string]string          `json:"errors,omitempty"`
+		}{Results: map[string]json.RawMessage{}, Errors: map[string]string{}}
+	)
+	for id, item := range in.Items {
+		state := map[string]any{"item": item}
+		if in.State != nil {
+			state["context"] = in.State
+		}
+		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			b, err := c.Evaluate(ctx, request{state, in.Questions, in.Model})
+			mu.Lock()
+			defer mu.Unlock()
+			n := len(b)
+			if err != nil {
+				n = len(err.Error())
+			}
+			switch {
+			case size+n > maxBody:
+				out.Errors[id] = fmt.Sprintf("evaluate: dropped: batch responses exceed %d bytes; split items across calls", maxBody)
+			case err != nil:
+				out.Errors[id] = err.Error()
+			default:
+				out.Results[id] = b
+			}
+			if size+n <= maxBody {
+				size += n
+			}
+		})
+	}
+	wg.Wait()
+	if len(out.Results) == 0 {
+		// Every item failed; report one error rather than a map of identical ones.
+		for id, msg := range out.Errors {
+			return nil, fmt.Errorf("all %d items failed, e.g. items[%q]: %s", len(in.Items), id, msg)
+		}
+	}
+	return json.Marshal(out)
 }
 
 // validate rejects the criteria shapes the API is known to refuse, so the caller

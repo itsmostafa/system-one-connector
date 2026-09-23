@@ -115,7 +115,7 @@ export default function (pi: ExtensionAPI) {
       "Jev is a fast structured-decision model: unstructured state in, typed answers " +
       "(noul, choice, score) with calibrated confidence out; 70-500ms, schema-enforced. " +
       "Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
-      "and map-reduce over large data — wherever hand-written logic is too brittle or latency matters. " +
+      "and mapping one question set over many records via items — wherever hand-written logic is too brittle or latency matters. " +
       "Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options). " +
       "Pass raw evidence as state, not your read of it — a conclusion asserted in state biases the answer toward it, and the confidence is then not independent corroboration.",
     promptSnippet:
@@ -123,10 +123,12 @@ export default function (pi: ExtensionAPI) {
     // filter: an empty INSTRUCTIONS must not inject a blank guideline.
     promptGuidelines: INSTRUCTIONS.split("\n").filter(Boolean),
     parameters: Type.Object({
-      state: Type.Any({
-        description:
-          "content to judge: plain text, or a JSON object/array with named fields; observed evidence or a faithful condensation of it, not your verdict about it",
-      }),
+      state: Type.Optional(
+        Type.Any({
+          description:
+            "content to judge: plain text, or a JSON object/array with named fields — observed evidence and background as named fields, not your verdict about it; optional with items, where it is sent to every item as context",
+        }),
+      ),
       questions: Type.Object(
         {},
         {
@@ -150,6 +152,16 @@ export default function (pi: ExtensionAPI) {
             ),
           }),
         },
+      ),
+      items: Type.Optional(
+        Type.Object(
+          {},
+          {
+            description:
+              `optional map of item id to that item's state; asks the same questions of each item in its own request, so items are judged independently and cannot see each other; at most 100 items per call. Each request's state is {"item": <the item>} plus {"context": state} when state is set, so instructions reference fields like item.subject and context.user_goals. The result is {"results": {id: response}, "errors": {id: message}}; item ids are not sent to the model`,
+            additionalProperties: Type.Any(),
+          },
+        ),
       ),
       model: Type.Optional(Type.String({ description: "model to use; defaults to the latest Jev on whichever endpoint is configured" })),
     }),

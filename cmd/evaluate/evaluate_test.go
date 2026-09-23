@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -364,29 +366,12 @@ func TestBigNumbersSurviveForwarding(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: "test"}, nil)
-	registerTools(s, &Client{URL: srv.URL, APIKey: "k", HTTP: srv.Client(), Model: "m"})
-	ct, st := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	ss, err := s.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ss.Close()
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "t", Version: "1"}, nil).Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cs.Close()
+	call := connectEvaluate(t, srv)
 
 	args := `{"state":{"a":9007199254740993,"b":9007199254740992,"c":1.50,"d":-0.1},` +
 		`"questions":{"q":{"type":"noul","instructions":"i"}}}`
-	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "evaluate", Arguments: json.RawMessage(args)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.IsError {
-		t.Fatalf("tool error: %s", res.Content[0].(*mcp.TextContent).Text)
+	if text, isErr := call(args); isErr {
+		t.Fatalf("tool error: %s", text)
 	}
 	for _, want := range []string{
 		`"a":9007199254740993`, // not rounded down to ...992
@@ -411,20 +396,7 @@ func TestValidateBlocksRequest(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: "test"}, nil)
-	registerTools(s, &Client{URL: srv.URL, APIKey: "k", HTTP: srv.Client(), Model: "m"})
-	ct, st := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	ss, err := s.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ss.Close()
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "t", Version: "1"}, nil).Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cs.Close()
+	call := connectEvaluate(t, srv)
 
 	for _, tc := range []struct {
 		name, criteria, qtype, wantErr string
@@ -441,13 +413,9 @@ func TestValidateBlocksRequest(t *testing.T) {
 		calls = 0
 		args := `{"state":"s","questions":{"q":{"type":"` + tc.qtype +
 			`","instructions":"i","criteria":` + tc.criteria + `}}}`
-		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "evaluate", Arguments: json.RawMessage(args)})
-		if err != nil {
-			t.Fatalf("%s: %v", tc.name, err)
-		}
-		got := res.Content[0].(*mcp.TextContent).Text
-		if (tc.wantErr != "") != res.IsError {
-			t.Errorf("%s: IsError=%v, got %q", tc.name, res.IsError, got)
+		got, isErr := call(args)
+		if (tc.wantErr != "") != isErr {
+			t.Errorf("%s: IsError=%v, got %q", tc.name, isErr, got)
 		}
 		if tc.wantErr != "" && !strings.Contains(got, tc.wantErr) {
 			t.Errorf("%s: got %q, want it to contain %q", tc.name, got, tc.wantErr)
@@ -455,5 +423,207 @@ func TestValidateBlocksRequest(t *testing.T) {
 		if calls != tc.wantCalls {
 			t.Errorf("%s: %d HTTP calls, want %d", tc.name, calls, tc.wantCalls)
 		}
+	}
+}
+
+// TestItems drives items mode end to end: one request per item, each carrying
+// only its own item (plus shared state as context), results keyed by item id,
+// and a failed item reported beside its siblings rather than failing the call.
+func TestItems(t *testing.T) {
+	var (
+		mu     sync.Mutex
+		states = map[string]map[string]any{}
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			State     map[string]any  `json:"state"`
+			Questions json.RawMessage `json:"questions"`
+			Items     json.RawMessage `json:"items"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		if body.Items != nil || body.Questions == nil {
+			t.Errorf("upstream body: items=%s questions=%s", body.Items, body.Questions)
+		}
+		item, _ := body.State["item"].(map[string]any)
+		subject, _ := item["subject"].(string)
+		mu.Lock()
+		states[subject] = body.State
+		mu.Unlock()
+		if strings.HasPrefix(subject, "bad") {
+			http.Error(w, `{"error":"boom"}`, http.StatusBadRequest)
+			return
+		}
+		if subject == "garbage" {
+			w.Write([]byte("not json"))
+			return
+		}
+		w.Write([]byte(`{"answers":{"q":{"type":"noul","noul":0.9}},"subject":"` + subject + `"}`))
+	}))
+	defer srv.Close()
+
+	call := connectEvaluate(t, srv)
+
+	q := `"questions":{"q":{"type":"noul","instructions":"Is ` + "`item.subject`" + ` urgent?"}}`
+
+	t.Run("fan out with context", func(t *testing.T) {
+		text, isErr := call(`{"state":{"goal":"house hunting"},` + q +
+			`,"items":{"e1":{"subject":"a"},"e2":{"subject":"b"},"e3":{"subject":"bad"}}}`)
+		if isErr {
+			t.Fatalf("tool error: %s", text)
+		}
+		var out struct {
+			Results map[string]map[string]any
+			Errors  map[string]string
+		}
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatal(err)
+		}
+		if len(out.Results) != 2 || out.Results["e1"]["subject"] != "a" || out.Results["e2"]["subject"] != "b" {
+			t.Errorf("results not keyed by item: %s", text)
+		}
+		if !strings.Contains(out.Errors["e3"], "boom") {
+			t.Errorf("errors[e3] = %q, want the API error", out.Errors["e3"])
+		}
+		if len(states) != 3 {
+			t.Fatalf("%d upstream requests, want 3", len(states))
+		}
+		for subject, st := range states {
+			if ctx, _ := st["context"].(map[string]any); ctx["goal"] != "house hunting" {
+				t.Errorf("item %s: context = %v", subject, st["context"])
+			}
+			if len(st) != 2 {
+				t.Errorf("item %s: state has %d keys, want item and context only: %v", subject, len(st), st)
+			}
+		}
+	})
+
+	t.Run("no shared state", func(t *testing.T) {
+		clear(states)
+		text, isErr := call(`{` + q + `,"items":{"e1":{"subject":"a"}}}`)
+		if isErr {
+			t.Fatalf("tool error: %s", text)
+		}
+		if _, ok := states["a"]["context"]; ok || len(states["a"]) != 1 {
+			t.Errorf("state = %v, want only item", states["a"])
+		}
+	})
+
+	// A 2xx body that is not JSON must fail only its own item: stored as raw
+	// JSON, it would otherwise break the final Marshal and drop every sibling.
+	t.Run("non-JSON success body", func(t *testing.T) {
+		text, isErr := call(`{` + q + `,"items":{"e1":{"subject":"a"},"e2":{"subject":"garbage"}}}`)
+		if isErr {
+			t.Fatalf("tool error: %s", text)
+		}
+		var out struct {
+			Results map[string]json.RawMessage
+			Errors  map[string]string
+		}
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := out.Results["e1"]; !ok || len(out.Results) != 1 {
+			t.Errorf("results = %s, want only e1", text)
+		}
+		if !strings.Contains(out.Errors["e2"], "not valid JSON") {
+			t.Errorf("errors[e2] = %q", out.Errors["e2"])
+		}
+	})
+
+	t.Run("all fail", func(t *testing.T) {
+		text, isErr := call(`{` + q + `,"items":{"e1":{"subject":"bad1"},"e2":{"subject":"bad2"}}}`)
+		if !isErr || !strings.Contains(text, "all 2 items failed") {
+			t.Errorf("IsError=%v, text=%q", isErr, text)
+		}
+	})
+
+	ids := make([]string, maxItems+1)
+	for i := range ids {
+		ids[i] = fmt.Sprintf(`"e%d":{}`, i)
+	}
+	tooMany := strings.Join(ids, ",")
+	for _, tc := range []struct{ name, args, want string }{
+		{"neither state nor items", `{` + q + `}`, "state or items is required"},
+		{"empty items", `{` + q + `,"items":{}}`, "items must not be empty"},
+		{"too many items", `{` + q + `,"items":{` + tooMany + `}}`, "exceeds the limit of 100"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			text, isErr := call(tc.args)
+			if !isErr || !strings.Contains(text, tc.want) {
+				t.Errorf("IsError=%v, text=%q, want %q", isErr, text, tc.want)
+			}
+		})
+	}
+}
+
+// The per-request cap bounds one reply, not a batch: without an aggregate cap
+// two replies just under it would both be kept, and 100 would hold gigabytes.
+func TestItemsAggregateCap(t *testing.T) {
+	big := `{"answers":{"q":"` + strings.Repeat("x", maxBody*2/3) + `"}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(big))
+	}))
+	defer srv.Close()
+	text, isErr := connectEvaluate(t, srv)(`{"questions":{"q":{"type":"noul","instructions":"i"}},` +
+		`"items":{"a":{"x":1},"b":{"x":2}}}`)
+	if isErr {
+		t.Fatalf("tool error: %.200s", text)
+	}
+	var out struct {
+		Results map[string]json.RawMessage
+		Errors  map[string]string
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Results) != 1 || len(out.Errors) != 1 {
+		t.Fatalf("got %d results and %d errors, want one of each", len(out.Results), len(out.Errors))
+	}
+	for _, msg := range out.Errors {
+		if !strings.Contains(msg, "batch responses exceed") {
+			t.Errorf("error = %q", msg)
+		}
+	}
+}
+
+// connectEvaluate registers the evaluate tool against srv and connects an MCP
+// client to it in memory, returning a call that yields the tool's text and
+// whether it was an error result.
+func connectEvaluate(t *testing.T, srv *httptest.Server) func(args string) (string, bool) {
+	t.Helper()
+	s := mcp.NewServer(&mcp.Implementation{Name: "evaluate", Version: "test"}, nil)
+	registerTools(s, &Client{URL: srv.URL, APIKey: "k", HTTP: srv.Client(), Model: "m"})
+	ct, st := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	ss, err := s.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ss.Close() })
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "t", Version: "1"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cs.Close() })
+	return func(args string) (string, bool) {
+		t.Helper()
+		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "evaluate", Arguments: json.RawMessage(args)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.Content[0].(*mcp.TextContent).Text, res.IsError
+	}
+}
+
+// A 2xx that is not JSON (a proxy's HTML page, say) must not come back as a
+// successful answer on the single-request path either.
+func TestNonJSONSuccessIsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("<html>gateway</html>"))
+	}))
+	defer srv.Close()
+	text, isErr := connectEvaluate(t, srv)(`{"state":"s","questions":{"q":{"type":"noul","instructions":"i"}}}`)
+	if !isErr || !strings.Contains(text, "not valid JSON") {
+		t.Errorf("IsError=%v, text=%q", isErr, text)
 	}
 }

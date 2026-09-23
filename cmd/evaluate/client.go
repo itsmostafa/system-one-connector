@@ -55,6 +55,12 @@ func (c *Client) Evaluate(ctx context.Context, req any) ([]byte, error) {
 			return nil, fmt.Errorf("evaluate: %s: response exceeds %d bytes", resp.Status, maxBody)
 		}
 		if resp.StatusCode/100 == 2 {
+			// Callers hand the body on as the API's JSON (the items path embeds
+			// it raw), so a non-JSON 2xx such as a proxy's HTML page is an error,
+			// not an answer.
+			if !json.Valid(b) {
+				return nil, fmt.Errorf("evaluate: %s: response is not valid JSON: %.200q", resp.Status, b)
+			}
 			return b, nil
 		}
 		retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == 529
