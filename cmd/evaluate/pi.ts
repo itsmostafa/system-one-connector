@@ -116,7 +116,7 @@ export default function (pi: ExtensionAPI) {
       "(noul, choice, score) with calibrated confidence out; 70-500ms, schema-enforced. " +
       "Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
       "and mapping one question set over many records via items — wherever hand-written logic is too brittle or latency matters. " +
-      "Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options). " +
+      "Not for prose, code, or free-form text: the answer space must be enumerable up front (up to 255 choice options or 10 score levels). " +
       "Pass raw evidence as state, not your read of it — a conclusion asserted in state biases the answer toward it, and the confidence is then not independent corroboration.",
     promptSnippet:
       "Classify, route, score, extract, or guard with Jev: typed answers and calibrated confidence to branch on, in 70-500ms, instead of parsing prose.",
@@ -147,7 +147,7 @@ export default function (pi: ExtensionAPI) {
             criteria: Type.Optional(
               Type.Any({
                 description:
-                  'noul: optional {"true": ..., "false": ...} descriptions; choice (required): map of option to description or null; score (required): ordered array of at least 2 level descriptions, e.g. ["poor", "fair", "good"] — an array, not the index-keyed object the response legend comes back as',
+                  'noul: optional {"true": ..., "false": ...} descriptions; choice (required): map of up to 255 options to descriptions or null; score (required): ordered array of 1 to 10 level descriptions, e.g. ["poor", "fair", "good"] — an array, not the index-keyed object the response legend comes back as',
               }),
             ),
           }),

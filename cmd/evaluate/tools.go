@@ -39,7 +39,7 @@ func add[In any](s *mcp.Server, t *mcp.Tool, fn func(ctx context.Context, in In)
 type question struct {
 	Type         string `json:"type" jsonschema:"noul (probability a yes/no condition holds), choice (one option from the criteria map), or score (probability-weighted position on ordered criteria levels)"`
 	Instructions any    `json:"instructions" jsonschema:"the judgment to make, with its full meaning; a string, or an object/array for definitions, contrasts, and examples; name the condition to test, not the conclusion you expect"`
-	Criteria     any    `json:"criteria,omitempty" jsonschema:"noul: optional {\"true\": ..., \"false\": ...} descriptions; choice (required): map of option to description or null; score (required): ordered array of at least 2 level descriptions, e.g. [\"poor\", \"fair\", \"good\"] — an array, not the index-keyed object the response legend comes back as"`
+	Criteria     any    `json:"criteria,omitempty" jsonschema:"noul: optional {\"true\": ..., \"false\": ...} descriptions; choice (required): map of up to 255 options to descriptions or null; score (required): ordered array of 1 to 10 level descriptions, e.g. [\"poor\", \"fair\", \"good\"] — an array, not the index-keyed object the response legend comes back as"`
 }
 
 type evaluateIn struct {
@@ -65,11 +65,16 @@ const itemConcurrency = 8
 // few hundred the 429 retries of one call start starving the next.
 const maxItems = 100
 
+const (
+	maxChoiceOptions = 255
+	maxScoreLevels   = 10
+)
+
 const toolDescription = "Jev is a fast structured-decision model: unstructured state in, typed answers " +
 	"(noul, choice, score) with calibrated confidence out; 70-500ms, schema-enforced. " +
 	"Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
 	"and mapping one question set over many records via items — wherever hand-written logic is too brittle or latency matters. " +
-	"Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options). " +
+	"Not for prose, code, or free-form text: the answer space must be enumerable up front (up to 255 choice options or 10 score levels). " +
 	"Pass raw evidence as state, not your read of it — a conclusion asserted in state biases the answer toward it, and the confidence is then not independent corroboration."
 
 func registerTools(s *mcp.Server, c *Client) {
@@ -173,14 +178,20 @@ func validate(in evaluateIn) error {
 		switch q.Type {
 		case "score":
 			if v, ok := q.Criteria.([]any); ok && len(v) > 0 {
+				if len(v) > maxScoreLevels {
+					return fmt.Errorf("questions[%q].criteria: score criteria has %d levels; maximum is %d", id, len(v), maxScoreLevels)
+				}
 				continue
 			}
-			want = "an array of level descriptions, ordered low to high"
+			want = "an array of 1 to 10 level descriptions, ordered low to high"
 		case "choice":
 			if v, ok := q.Criteria.(map[string]any); ok && len(v) > 0 {
+				if len(v) > maxChoiceOptions {
+					return fmt.Errorf("questions[%q].criteria: choice criteria has %d options; maximum is %d", id, len(v), maxChoiceOptions)
+				}
 				continue
 			}
-			want = "an object mapping each option to a description or null"
+			want = "an object mapping 1 to 255 options to a description or null"
 		case "noul":
 			if q.Criteria == nil {
 				continue
