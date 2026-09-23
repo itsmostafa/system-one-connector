@@ -1,6 +1,6 @@
 # Tool reference
 
-`evaluate` exposes one MCP tool, also named `evaluate`. It sends state and typed questions to Jev and returns the API's response JSON with the answer values unchanged. It only fixes the order of keys: each `probabilities` map lists a choice's options in the order you wrote the criteria, and a score's levels (and `legend`) by index. For the full API contract, see https://docs.typesafe.ai/api.
+`evaluate` exposes one MCP tool, also named `evaluate`. It sends state and typed questions to Jev and returns the API's response with its values intact, except that it lists each `probabilities` map in criteria order (a score's levels and `legend` by index), applies [`min_confidence`](#input), and in items mode moves `model` and `usage` into [`meta`](#many-records-items). For the full API contract, see https://docs.typesafe.ai/api.
 
 ## Input
 
