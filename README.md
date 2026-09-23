@@ -1,69 +1,47 @@
 # Typesafe MCP
 
-**Give your AI agent typed decisions instead of free text.** `evaluate` is an MCP server that lets Claude Code, Claude Desktop, Codex, and [pi](https://pi.dev) call [TypeSafe](https://typesafe.ai)'s Jev model and get back probabilities they can branch on. One command, `evaluate setup mcp`, registers it with the first three (if detected); `evaluate setup pi` covers pi.
+**Give your AI agent answers it can act on: typed judgments with real probabilities, instead of prose it has to parse.**
+
+`evaluate` connects Claude Code, Claude Desktop, Codex and [pi](https://pi.dev) to [TypeSafe](https://typesafe.ai)'s Jev model. Your agent asks a question like "is this urgent?" or "which team owns this?" and gets back a number or an option it can use in an `if` statement.
 
 [![Latest release](https://img.shields.io/github/v/release/itsmostafa/typesafe-mcp?sort=semver)](https://github.com/itsmostafa/typesafe-mcp/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Go version](https://img.shields.io/github/go-mod/go-version/itsmostafa/typesafe-mcp)
 
 ```
-┌──────────────┐  evaluate   ┌──────────┐  POST /v1/systemone  ┌──────────────┐
-│ Claude Code  │ ──────────▶ │ evaluate │ ───────────────────▶ │ TypeSafe API │
-│ Claude Desk. │   (stdio)   │  (MCP)   │  retries 429 / 529   │  ── or ──    │
-│ Codex        │             │          │                      │  OpenRouter  │
-│ pi           │ ◀────────── │          │ ◀─────────────────── │              │
-└──────────────┘ typed JSON  └──────────┘   POST /decisions    └──────────────┘
+  "Help! My payouts have been          ┌──────────┐        is_urgent   0.95
+   failing for 3 days."          ───▶  │   Jev    │  ───▶  department  billing  (86%)
+                                       └──────────┘                   technical (14%)
+  is it urgent? which team?                                           sales      (0%)
 ```
 
 ## Why this exists
 
-**Problem:** When an agent needs a yes/no call, a routing decision, or a severity rating, it usually asks an LLM, then parses prose and hopes the format holds. The answer has no probability attached, so the agent cannot tell a confident "yes" from a coin flip.
+**The problem:** An agent that needs a quick judgment call usually asks an LLM, reads a paragraph back, and guesses what it meant. "This seems fairly urgent" gives the agent nothing to branch on, and it can't tell a confident answer from a coin flip.
 
-**Solution:** `evaluate` exposes one tool, `evaluate`, that sends state plus typed questions to Jev and returns structured answers with probabilities. Nothing to parse and no prompt formatting to maintain. `evaluate setup mcp` wires it into Claude Desktop, Claude Code, and Codex in one step, and `evaluate setup pi` installs the equivalent extension for pi.
+**The fix:** Jev is a model built for judgments rather than text generation. You name the question and the possible answers, and Jev returns a probability for each answer in a fixed format. Your agent gets data it can compare against a threshold, and never has to parse prose.
 
 ## Quickstart
 
-**1. Install** (macOS and Linux, amd64 and arm64):
+**1. Install** (macOS and Linux):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/itsmostafa/typesafe-mcp/main/install.sh | sh
 ```
 
-It installs to `~/.local/bin`. If that is not on your `PATH`, add it with `export PATH="$HOME/.local/bin:$PATH"`. With Go, you can instead run `go install github.com/itsmostafa/typesafe-mcp/cmd/evaluate@latest`. Run `evaluate update` to upgrade in place.
-
-**2. Register with your agents** (get a key at https://console.typesafe.ai/)
+**2. Connect your agents** ([get a key](https://console.typesafe.ai/)):
 
 ```sh
 TYPESAFE_API_KEY=your-key evaluate setup mcp
 ```
 
-Already on [OpenRouter](https://openrouter.ai/~typesafe/jev-latest)? Use that key instead and `evaluate` routes through OpenRouter's Decisions endpoint, billed to your OpenRouter account:
+This finds Claude Code, Claude Desktop and Codex and registers `evaluate` with each one. If you already have an [OpenRouter](https://openrouter.ai/~typesafe/jev-latest) account, set `OPENROUTER_API_KEY` instead. For pi, run `evaluate setup pi`.
 
-```sh
-OPENROUTER_API_KEY=your-key evaluate setup mcp
-```
-
-`TYPESAFE_API_KEY` wins if both are set. OpenRouter's Decisions endpoint is still on its `/api/alpha/` path and may move.
-
-Point the TypeSafe route at another host (a proxy or a self-hosted gateway) with `TYPESAFE_BASE_URL`; the base is host-level, `/v1/systemone` is appended, and the default is `https://api.typesafe.ai`. It must be an absolute `http(s)` URL and has no effect on the OpenRouter route:
-
-```sh
-TYPESAFE_API_KEY=your-key TYPESAFE_BASE_URL=https://jev.internal evaluate setup mcp
-```
-
-Using [pi](https://pi.dev)? It has no MCP client, so `evaluate` ships a pi extension instead:
-
-```sh
-evaluate setup pi
-```
-
-That writes `~/.pi/agent/extensions/evaluate.ts`, which registers `evaluate` as a native pi tool and talks to `evaluate mcp` for you. Run `/reload` in pi to pick it up. Unlike the MCP clients, nothing is baked into the file: the extension reads your key from the shell pi runs in.
-
-**3. Ask your agent a judgment question**
+**3. Ask a question:**
 
 > "Use evaluate to decide whether this ticket is urgent and which team should own it: *Help! My payouts have been failing for 3 days.*"
 
-The agent calls `evaluate` with:
+Your agent sends:
 
 ```json
 {
@@ -76,37 +54,43 @@ The agent calls `evaluate` with:
 }
 ```
 
-It gets back the raw response JSON, with each answer under the same id you gave it.
+And gets back:
+
+```json
+{
+  "answers": {
+    "is_urgent": {"type": "noul", "noul": 0.95},
+    "department": {"type": "choice", "choice": "billing", "confidence": 0.79,
+      "probabilities": {"billing": 0.86, "technical": 0.14, "sales": 0.0}}
+  }
+}
+```
 
 ## What you get
 
-- **One-command setup across clients.** `evaluate setup mcp` registers with Claude Code (user scope) and Codex when their CLIs are on `PATH`, and with Claude Desktop when it is installed. Every `TYPESAFE_*` variable in your shell is carried over, plus `OPENROUTER_API_KEY`. Re-run it to update. `evaluate setup pi` installs the pi extension.
-- **Answers your code can branch on.** Three question types: `noul` (probability a condition holds), `choice` (one option from a map), `score` (position on ordered levels).
-- **Rate limits handled for you.** 429 and 529 responses are retried with exponential backoff. Other API errors come back to the agent as tool errors it can read and act on.
-- **Several questions, one call.** Batch independent questions over the same state; they run in parallel.
-- **One question set, many records.** Pass `items` (id → record, up to 100) to ask the same questions of each record independently; a failed item is reported beside the others instead of failing the call.
-- **Agents that use it well out of the box.** The server ships usage guidance (narrow questions, JSON state, no-match options, evidence not verdicts) to the client, so the agent writes better questions without extra prompting.
-- **A single static binary.** No runtime, no Node, no Python. `evaluate update` upgrades it in place from a checksum-verified release. Read-only tool, 60s request timeout, responses over 16 MiB are rejected, never truncated.
+- **Answers your agent can branch on.** Three question types cover most judgment calls: yes or no (`noul`), pick one option (`choice`), and rate on a scale (`score`). Each answer comes with probabilities.
+- **Confidence you can act on.** A 0.95 and a 0.55 lead to different actions. Your agent can proceed on confident answers and escalate unsure ones to you.
+- **Fast enough to call often.** Jev typically answers in under half a second.
+- **Many questions in one call.** Ask about urgency, ownership and sentiment together, and they run in parallel.
+- **Whole datasets in one call.** Pass up to 100 records as `items` and ask the same questions of each one. If one record fails, the rest still complete.
+- **Agents that use it well without extra prompting.** The server tells your agent how to write good questions (narrow judgments, structured state, evidence rather than conclusions).
+- **Setup in one command.** `evaluate setup mcp` configures every supported client it finds. Run it again to update.
+- **No dependencies.** One static binary with no Node or Python runtime. `evaluate update` upgrades it in place.
+
+## Documentation
+
+- [Configuration](docs/configuration.md): install options, API keys, OpenRouter, custom hosts, pi, and manual client setup.
+- [Tool reference](docs/tool-reference.md): input fields, question types, reading scores, `items`, limits and errors.
+- [Development](docs/development.md): building, testing and releasing.
 
 ## About TypeSafe
 
-[TypeSafe](https://typesafe.ai) builds System One models: small units of AI intelligence you use like programming primitives. Instead of generating text, they turn natural language and application state into typed judgments and probabilities that code can combine. Jev is one of them.
+[TypeSafe](https://typesafe.ai) builds System One models: small units of AI judgment that you use like programming primitives. Instead of generating text, they turn natural language and application state into typed answers and probabilities that code can combine. Jev is the first of them.
 
 [Website](https://typesafe.ai) · [Docs](https://docs.typesafe.ai) · [API reference](https://docs.typesafe.ai/api) · [Console](https://console.typesafe.ai/)
 
-## Reference
-
-| Field | Required | Description |
-|---|---|---|
-| `state` | yes, unless `items` is set | Content to judge: plain text, or a JSON object/array with named fields. Observed evidence plus the background it is judged against (user goals, policies), not your conclusion about it. With `items`, it is sent to every item as `context` |
-| `questions` | yes | Map of question id to `{type, instructions, criteria?}` |
-| `items` | no | Map of item id to record. Each item is judged in its own request with state `{"item": <record>, "context": <state>}`; the result is `{"results": {id: response}, "errors": {id: message}}` |
-| `model` | no | Defaults to `jev-latest`, or `~typesafe/jev-latest` on OpenRouter |
-
-Criteria shape per question type, the 0-indexed score answers, and manual client config: [`cmd/evaluate/CLAUDE.md`](cmd/evaluate/CLAUDE.md). Malformed criteria are rejected locally, before the request, with the field path you sent. Full API docs: https://docs.typesafe.ai/api
-
 ## Contributing
 
-Issues and pull requests are welcome. The repo uses [Task](https://taskfile.dev): `task check` runs gofmt, `go vet` and the tests with `-race`, and `task inspect` opens the MCP Inspector against a local build. [`CLAUDE.md`](CLAUDE.md) covers the conventions.
+Issues and pull requests are welcome. See [docs/development.md](docs/development.md) to get started.
 
-If `evaluate` saves you some prompt-parsing, a star helps others find it.
+If `evaluate` spares your agent some prose-parsing, a ⭐ helps others find it.
