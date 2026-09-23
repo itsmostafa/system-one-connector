@@ -118,7 +118,7 @@ func evaluateItems(ctx context.Context, c *Client, in evaluateIn) ([]byte, error
 		sem  = make(chan struct{}, itemConcurrency)
 		out  = struct {
 			Results map[string]json.RawMessage `json:"results"`
-			Errors  map[string]string          `json:"errors,omitempty"`
+			Errors  map[string]string          `json:"errors"`
 		}{Results: map[string]json.RawMessage{}, Errors: map[string]string{}}
 	)
 	for id, item := range in.Items {

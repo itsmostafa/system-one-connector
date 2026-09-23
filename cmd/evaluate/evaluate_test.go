@@ -497,6 +497,18 @@ func TestItems(t *testing.T) {
 		}
 	})
 
+	// The documented result shape carries errors even when nothing failed, so
+	// callers can read it without a presence check.
+	t.Run("errors present on success", func(t *testing.T) {
+		text, isErr := call(`{` + q + `,"items":{"e1":{"subject":"a"},"e2":{"subject":"b"}}}`)
+		if isErr {
+			t.Fatalf("tool error: %s", text)
+		}
+		if !strings.Contains(text, `"errors":{}`) {
+			t.Errorf("want \"errors\":{} in %s", text)
+		}
+	})
+
 	t.Run("no shared state", func(t *testing.T) {
 		clear(states)
 		text, isErr := call(`{` + q + `,"items":{"e1":{"subject":"a"}}}`)
