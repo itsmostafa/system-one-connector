@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.4](https://github.com/itsmostafa/typesafe-mcp/compare/v0.4.3...v0.4.4) (2026-09-23)
+
+
+### Features
+
+* **tools:** add items to evaluate one question set over many records ([aa2d57e](https://github.com/itsmostafa/typesafe-mcp/commit/aa2d57e6480fe900d65479d685d39b31829f0380))
+* **tools:** add items to evaluate one question set over many records ([adada41](https://github.com/itsmostafa/typesafe-mcp/commit/adada41eed1d368491c83a5b31d2e9948c14f728))
+* **tools:** warn agents off arithmetic and oversized state ([04f3f13](https://github.com/itsmostafa/typesafe-mcp/commit/04f3f1306797765866accbfe7b3f70f08cfbf802))
+
+
+### Bug Fixes
+
+* **client:** reject non-JSON success bodies on every path ([747599f](https://github.com/itsmostafa/typesafe-mcp/commit/747599f5c6441637ea7f493870dbc3d7371d4285))
+* **tools:** cap the combined size of an items batch ([7066f46](https://github.com/itsmostafa/typesafe-mcp/commit/7066f46cf73775c5d5d378baab926dd07ca572dd))
+* **tools:** reject unknown question types and noul criteria keys the API drops ([a6a0b4e](https://github.com/itsmostafa/typesafe-mcp/commit/a6a0b4e5f8586f97d5410c0fee0472b103126dfe))
+* **tools:** reject unknown question types and noul criteria keys the API drops ([d66817c](https://github.com/itsmostafa/typesafe-mcp/commit/d66817cf7fe8b0d238ce6662a768b3a6f3481138))
+
 ## [0.4.3](https://github.com/itsmostafa/typesafe-mcp/compare/v0.4.2...v0.4.3) (2026-09-21)
 
 
