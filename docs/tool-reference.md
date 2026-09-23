@@ -32,7 +32,11 @@ A `choice` or `score` question can have at most 255 options. Give a `score` at l
 
 A `noul` answer near 0.5 means Jev is unsure. It does not mean "somewhat true".
 
-`choice` and `score` answers include a `confidence` value. It measures how concentrated the probability distribution is. It does not measure whether the answer is correct.
+`choice` and `score` answers include a `confidence` value from 0 to 1. The API computes it from how the probabilities are spread, and `evaluate` passes it through unchanged. It measures how concentrated the distribution is, not whether the answer is correct, and it is not the chosen option's probability:
+
+- For `choice` over N options, `confidence = (N·p_top − 1) / (N − 1)`. It is 0 when every option is equally likely and 1 when one option has all the probability. With two options it equals `p_top − p_second`, so 0.78/0.22 gives 0.56. The docs example below has 0.86/0.14/0.0, which gives 0.79.
+- For `score`, TypeSafe does not publish a formula. A single peak on one level gives high confidence, and probability spread across levels gives low confidence.
+- `noul` answers have no `confidence`. Read the `noul` probability itself: values near 0 or 1 are confident, and values near 0.5 are not.
 
 Score answers are 0-indexed: N levels score from `0` to `N-1`. So `3.87` over 5 levels sits between levels 3 and 4; it is not 3.87 out of 5. The response includes a `legend` that maps each index to its level and a `probabilities` entry for each level.
 

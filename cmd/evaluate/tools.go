@@ -79,7 +79,8 @@ const itemConcurrency = 8
 const maxItems = 100
 
 const toolDescription = "Jev is a fast structured-decision model: unstructured state in, typed answers " +
-	"(noul, choice, score) with calibrated confidence out; 70-500ms, schema-enforced. " +
+	"(noul, choice, score) with probabilities out; 70-500ms, schema-enforced. " +
+	"Choice and score answers carry a 0-1 confidence computed from the spread of their probabilities, not the chosen option's probability: for choice it is (N·p_top−1)/(N−1) over N options, which is p_top−p_second with two; TypeSafe publishes no formula for score; noul has none, so read the noul probability itself. " +
 	"Use for classification, routing, scoring, extraction, branching, guardrails/judging, " +
 	"and mapping one question set over many records via items — wherever hand-written logic is too brittle or latency matters. " +
 	"Not for prose, code, or free-form text: the answer space must be enumerable up front (max 255 options). " +
