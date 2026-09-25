@@ -135,7 +135,7 @@ func route() (*Client, error) {
 		return &Client{
 			URL:    u.JoinPath("v1", "systemone").String(),
 			APIKey: os.Getenv("TYPESAFE_API_KEY"),
-			Model:  "jev-latest",
+			Model:  cmp.Or(os.Getenv("TYPESAFE_MODEL"), "jev-latest"),
 		}, nil
 	case os.Getenv("OPENROUTER_API_KEY") != "":
 		return &Client{

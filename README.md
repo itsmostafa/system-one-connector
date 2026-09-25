@@ -4,6 +4,8 @@
 
 `evaluate` connects Claude Code, Claude Desktop, Codex, Hermes and [pi](https://pi.dev) to [TypeSafe](https://typesafe.ai)'s Jev model. Your agent asks a question like "is this urgent?" or "which team owns this?" and gets back a number or an option it can use in an `if` statement.
 
+Not tied to one provider: the same connector also runs open System One models you host yourself, such as [CLM](https://huggingface.co/Contrastive-LM/CLM-v0.1-8B) and Laya. See [running CLM locally](docs/configuration.md#running-clm-locally).
+
 [![Latest release](https://img.shields.io/github/v/release/itsmostafa/system-one-connector?sort=semver)](https://github.com/itsmostafa/system-one-connector/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Go version](https://img.shields.io/github/go-mod/go-version/itsmostafa/system-one-connector)
@@ -35,7 +37,7 @@ curl -fsSL https://raw.githubusercontent.com/itsmostafa/system-one-connector/mai
 TYPESAFE_API_KEY=your-key evaluate setup mcp
 ```
 
-This finds Claude Code, Claude Desktop, Codex and Hermes and registers `evaluate` with each one. If you already have an [OpenRouter](https://openrouter.ai/~typesafe/jev-latest) account, set `OPENROUTER_API_KEY` instead. To run an open model such as Laya locally, point `TYPESAFE_BASE_URL` at your server and keep `TYPESAFE_API_KEY` set, since it selects that route; any non-empty value works if your server doesn't check keys, e.g. `TYPESAFE_API_KEY=local TYPESAFE_BASE_URL=http://127.0.0.1:8787 evaluate setup mcp` (see [custom hosts](docs/configuration.md#custom-typesafe-host)). For pi, run `evaluate setup pi`.
+This finds Claude Code, Claude Desktop, Codex and Hermes and registers `evaluate` with each one. If you already have an [OpenRouter](https://openrouter.ai/~typesafe/jev-latest) account, set `OPENROUTER_API_KEY` instead. To run an open model such as Laya locally, point `TYPESAFE_BASE_URL` at your server and keep `TYPESAFE_API_KEY` set, since it selects that route; any non-empty value works if your server doesn't check keys, e.g. `TYPESAFE_API_KEY=local TYPESAFE_BASE_URL=http://127.0.0.1:8787 evaluate setup mcp` (see [custom hosts](docs/configuration.md#custom-typesafe-host)). [CLM-v0.1-8B](https://huggingface.co/Contrastive-LM/CLM-v0.1-8B) works the same way; add `TYPESAFE_MODEL=clm-latest` (see [running CLM](docs/configuration.md#running-clm-locally)). For pi, run `evaluate setup pi`.
 
 **3. Ask a question:**
 

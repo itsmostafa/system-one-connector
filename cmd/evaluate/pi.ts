@@ -170,7 +170,7 @@ export default function (pi: ExtensionAPI) {
           },
         ),
       ),
-      model: Type.Optional(Type.String({ description: "model to use; defaults to the latest Jev on whichever endpoint is configured" })),
+      model: Type.Optional(Type.String({ description: "model to use; defaults to the latest Jev on whichever endpoint is configured; on the TypeSafe route, TYPESAFE_MODEL replaces that default when set" })),
       include_item_usage: Type.Optional(
         Type.Boolean({
           description:

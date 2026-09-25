@@ -40,7 +40,7 @@ To upgrade, run `evaluate update`. It replaces the binary in place with the late
 
 | Variable | Route | Default model |
 |---|---|---|
-| `TYPESAFE_API_KEY` | TypeSafe API, `POST {TYPESAFE_BASE_URL}/v1/systemone` | `jev-latest` |
+| `TYPESAFE_API_KEY` | TypeSafe API, `POST {TYPESAFE_BASE_URL}/v1/systemone` | `jev-latest`, or `TYPESAFE_MODEL` if set |
 | `OPENROUTER_API_KEY` | OpenRouter Decisions endpoint, billed to your OpenRouter account | `~typesafe/jev-latest` |
 
 Get a TypeSafe key at https://console.typesafe.ai/. The model page on OpenRouter is https://openrouter.ai/~typesafe/jev-latest.
@@ -62,6 +62,18 @@ TYPESAFE_API_KEY=your-key TYPESAFE_BASE_URL=https://jev.internal evaluate setup 
 - The value must be an absolute `http` or `https` URL. `evaluate setup` rejects anything else rather than writing a broken endpoint into your client configs.
 - It has no effect on the OpenRouter route.
 - It also works with a local server that implements `POST /v1/systemone`, such as one serving Laya. `TYPESAFE_API_KEY` must still be set, since it is what selects this route. Use whatever key your server expects; if it doesn't check keys, any non-empty value such as `local` works.
+
+### Running CLM locally
+
+[CLM-v0.1-8B](https://huggingface.co/Contrastive-LM/CLM-v0.1-8B) is an open System One model whose `clm-serve` implements `POST /v1/systemone`, so it works through the custom host route. Start its servers as described in the [CLM README](https://github.com/Contrastive-LM/CLM#quickstart) (it needs a GPU), then register `evaluate` with the CLM model as the default:
+
+```sh
+TYPESAFE_API_KEY=local TYPESAFE_BASE_URL=http://127.0.0.1:8700 TYPESAFE_MODEL=clm-latest evaluate setup mcp
+```
+
+- `TYPESAFE_MODEL` replaces the default `jev-latest` on the TypeSafe route. CLM rejects unknown model names, so without it every call must pass `model: "clm-latest"`. It has no effect on the OpenRouter route, and a `model` passed in a tool call still wins.
+- Use the real key instead of `local` if you started `clm-serve` with `CLM_API_KEY`.
+- CLM embeds state as prose and truncates it past 2048 tokens by default. The tool's guidance is written for Jev, so backticked field paths and the latency figures may not carry over to CLM.
 
 ## `evaluate setup mcp`
 
@@ -100,7 +112,7 @@ To use any other MCP client, point it at:
 /absolute/path/to/evaluate mcp
 ```
 
-Put `TYPESAFE_API_KEY` or `OPENROUTER_API_KEY` in the server's `env`. Add `TYPESAFE_BASE_URL` if you use a custom host. For example:
+Put `TYPESAFE_API_KEY` or `OPENROUTER_API_KEY` in the server's `env`. Add `TYPESAFE_BASE_URL` if you use a custom host, and `TYPESAFE_MODEL` if that host serves a model other than `jev-latest`. For example:
 
 ```json
 {
