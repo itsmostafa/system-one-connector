@@ -7,7 +7,7 @@ How to install `evaluate`, choose an API route, and connect it to your agents.
 The install script supports macOS and Linux on amd64 and arm64. It checks the release archive against its published SHA-256 checksum before installing:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/itsmostafa/typesafe-mcp/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/itsmostafa/system-one-connector/main/install.sh | sh
 ```
 
 It installs to `~/.local/bin`, or to `EVALUATE_INSTALL_DIR` if that is set. If the directory is not on your `PATH`, add it:

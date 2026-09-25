@@ -1,6 +1,6 @@
 #!/bin/sh
 # Install the latest evaluate release from GitHub.
-#   curl -fsSL https://raw.githubusercontent.com/itsmostafa/typesafe-mcp/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/itsmostafa/system-one-connector/main/install.sh | sh
 # Override the target directory with EVALUATE_INSTALL_DIR.
 set -eu
 
