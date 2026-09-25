@@ -84,7 +84,7 @@ func newRootCmd() *cobra.Command {
 	setupCmd.AddCommand(
 		&cobra.Command{
 			Use:   "mcp",
-			Short: "Register with Claude Code, Claude Desktop, and Codex",
+			Short: "Register with Claude Code, Claude Desktop, Codex, and Hermes",
 			Args:  cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error {
 				return runMCPSetup(cmd.Context())

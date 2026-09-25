@@ -29,8 +29,8 @@ func evaluateBinary() (string, error) {
 	return exe, nil
 }
 
-// runMCPSetup registers this binary as the "evaluate" MCP server with Claude Code
-// and Codex, via their own CLIs, baking in the TYPESAFE_* variables and
+// runMCPSetup registers this binary as the "evaluate" MCP server with Claude Code,
+// Codex and Hermes, via their own CLIs, baking in the TYPESAFE_* variables and
 // OPENROUTER_API_KEY from the current environment: clients launch the server
 // without the user's shell env.
 func runMCPSetup(ctx context.Context) error {
@@ -62,7 +62,7 @@ func runMCPSetup(ctx context.Context) error {
 			exec.CommandContext(ctx, c.cli, c.reset...).Run()
 		}
 		// Captured so the CLIs' own chatter stays out of the list; shown on failure.
-		if out, err := exec.CommandContext(ctx, c.cli, c.add...).CombinedOutput(); err != nil {
+		if out, err := c.install(ctx); err != nil {
 			fail(c.name, fmt.Errorf("%w\n%s", err, bytes.TrimSpace(out)))
 			if prev != nil {
 				// Not ctx: an interrupted add must still put the old entry back.
@@ -201,20 +201,47 @@ func setupEnv(environ []string) []string {
 type setupCommand struct {
 	name, cli  string
 	reset, add []string
+	// answers is fed to the add command's stdin: hermes asks for confirmation
+	// even when scripted, and cancels on EOF.
+	answers string
+	// confirm, when set, must appear in the add output: hermes exits 0 even when
+	// it cancels or saves the server disabled.
+	confirm string
+}
+
+// install runs the add command and checks the CLI confirmed it.
+func (c setupCommand) install(ctx context.Context) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, c.cli, c.add...)
+	if c.answers != "" {
+		cmd.Stdin = strings.NewReader(c.answers)
+	}
+	out, err := cmd.CombinedOutput()
+	if err == nil && c.confirm != "" && !bytes.Contains(out, []byte(c.confirm)) {
+		err = errors.New("server was not registered and enabled")
+	}
+	return out, err
 }
 
 func setupCommands(exe string, env []string) []setupCommand {
 	claude := []string{"mcp", "add", "evaluate", "-s", "user"}
 	codex := []string{"mcp", "add", "evaluate"}
+	hermes := []string{"mcp", "add", "evaluate"}
 	for _, kv := range env {
 		// One flag per pair: claude's -e is variadic and would swallow the name.
 		claude = append(claude, "-e", kv)
 		codex = append(codex, "--env", kv)
 	}
+	if len(env) > 0 {
+		// Variadic, and safe ahead of --command; --args must come last.
+		hermes = append(hermes, append([]string{"--env"}, env...)...)
+	}
+	hermes = append(hermes, "--command", exe, "--args", "mcp")
 	return []setupCommand{
 		// `claude mcp add` refuses an existing name; `codex mcp add` overwrites.
-		{"Claude Code", "claude", []string{"mcp", "remove", "evaluate", "-s", "user"}, append(claude, "--", exe, "mcp")},
-		{"Codex", "codex", nil, append(codex, "--", exe, "mcp")},
+		{"Claude Code", "claude", []string{"mcp", "remove", "evaluate", "-s", "user"}, append(claude, "--", exe, "mcp"), "", ""},
+		{"Codex", "codex", nil, append(codex, "--", exe, "mcp"), "", ""},
+		// `hermes mcp add` overwrites after a first "Y", then asks to enable the tools.
+		{"Hermes", "hermes", nil, hermes, "Y\nY\n", "tools enabled)"},
 	}
 }
 

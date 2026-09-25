@@ -28,7 +28,7 @@ To upgrade, run `evaluate update`. It replaces the binary in place with the late
 
 | Command | What it does |
 |---|---|
-| `evaluate setup mcp` | Registers the server with Claude Code, Claude Desktop and Codex |
+| `evaluate setup mcp` | Registers the server with Claude Code, Claude Desktop, Codex and Hermes |
 | `evaluate setup pi` | Installs the `evaluate` extension for pi |
 | `evaluate mcp` | Runs the MCP server over stdio (clients start this for you) |
 | `evaluate update` | Updates to the latest release |
@@ -73,9 +73,10 @@ This registers the binary as an MCP server named `evaluate` with each client it 
 
 - **Claude Code**, at user scope, when the `claude` CLI is on `PATH`.
 - **Codex**, when the `codex` CLI is on `PATH`.
+- **Hermes**, when the `hermes` CLI is on `PATH`.
 - **Claude Desktop**, when it is installed. Setup edits `claude_desktop_config.json`. Restart Claude Desktop afterwards.
 
-MCP clients start the server without your shell environment. Setup therefore copies every `TYPESAFE_*` variable in your shell, plus `OPENROUTER_API_KEY`, into each client's config. After you change a key or add a variable, run setup again.
+MCP clients start the server without your shell environment. Setup therefore copies every `TYPESAFE_*` variable in your shell, plus `OPENROUTER_API_KEY`, into each client's config. After you change a key or add a variable, run setup again. Running it again replaces the existing `evaluate` entry in each client, so anything you changed on that entry (a Hermes tool selection, say) is reset.
 
 A client that setup does not find is skipped with a message. You can configure it by hand (see below).
 

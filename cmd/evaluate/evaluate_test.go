@@ -169,10 +169,34 @@ func TestSetupCommands(t *testing.T) {
 		{"mcp", "add", "evaluate", "-s", "user", "-e", "TYPESAFE_API_KEY=k", "-e", "OPENROUTER_API_KEY=o", "--", "/bin/evaluate", "mcp"},
 		nil,
 		{"mcp", "add", "evaluate", "--env", "TYPESAFE_API_KEY=k", "--env", "OPENROUTER_API_KEY=o", "--", "/bin/evaluate", "mcp"},
+		nil,
+		{"mcp", "add", "evaluate", "--env", "TYPESAFE_API_KEY=k", "OPENROUTER_API_KEY=o", "--command", "/bin/evaluate", "--args", "mcp"},
 	}
-	got := [][]string{cmds[0].reset, cmds[0].add, cmds[1].reset, cmds[1].add}
+	got := [][]string{cmds[0].reset, cmds[0].add, cmds[1].reset, cmds[1].add, cmds[2].reset, cmds[2].add}
 	if !slices.EqualFunc(got, want, slices.Equal) {
 		t.Fatalf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestSetupHermesAnswers(t *testing.T) {
+	var hermes setupCommand
+	for _, c := range setupCommands("/bin/evaluate", nil) {
+		if c.cli == "hermes" {
+			hermes = c
+		}
+	}
+	if hermes.answers != "Y\nY\n" || hermes.confirm == "" {
+		t.Fatalf("hermes answers = %q, confirm = %q", hermes.answers, hermes.confirm)
+	}
+
+	// `cat` echoes what run pipes to stdin, standing in for the CLI's output.
+	echo := setupCommand{cli: "cat", answers: "saved (1/1 tools enabled)\n", confirm: "tools enabled)"}
+	if out, err := echo.install(context.Background()); err != nil || string(out) != echo.answers {
+		t.Fatalf("install = %q, %v; want stdin echoed, nil", out, err)
+	}
+	echo.answers = "Saved 'evaluate' to config (disabled)\n"
+	if _, err := echo.install(context.Background()); err == nil {
+		t.Fatal("install accepted output without the confirmation")
 	}
 }
 
