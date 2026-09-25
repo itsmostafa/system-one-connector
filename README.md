@@ -4,6 +4,8 @@
 
 `evaluate` connects Claude Code, Claude Desktop, Codex, Hermes and [pi](https://pi.dev) to [TypeSafe](https://typesafe.ai)'s Jev model. Your agent asks a question like "is this urgent?" or "which team owns this?" and gets back a number or an option it can use in an `if` statement.
 
+Not tied to one provider: the same connector also runs open System One models you host yourself, such as [CLM](https://huggingface.co/Contrastive-LM/CLM-v0.1-8B) and Laya. See [running CLM locally](docs/configuration.md#running-clm-locally).
+
 [![Latest release](https://img.shields.io/github/v/release/itsmostafa/system-one-connector?sort=semver)](https://github.com/itsmostafa/system-one-connector/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Go version](https://img.shields.io/github/go-mod/go-version/itsmostafa/system-one-connector)
