@@ -122,6 +122,7 @@ func TestRoute(t *testing.T) {
 		t.Setenv("TYPESAFE_API_KEY", tc.typesafe)
 		t.Setenv("OPENROUTER_API_KEY", tc.openrouter)
 		t.Setenv("TYPESAFE_BASE_URL", tc.base)
+		t.Setenv("TYPESAFE_MODEL", "")
 		c, err := route()
 		if err != nil {
 			t.Errorf("%+v: %v", tc, err)
@@ -132,6 +133,22 @@ func TestRoute(t *testing.T) {
 			t.Errorf("%+v: got %s %s %s", tc, c.URL, c.Model, c.APIKey)
 		}
 	}
+
+	// TYPESAFE_MODEL replaces the default on the TypeSafe route only, so a local
+	// server that does not know jev-latest can be the default.
+	t.Setenv("TYPESAFE_MODEL", "clm-latest")
+	t.Setenv("TYPESAFE_BASE_URL", "")
+	t.Setenv("OPENROUTER_API_KEY", "")
+	t.Setenv("TYPESAFE_API_KEY", "t")
+	if c, err := route(); err != nil || c.Model != "clm-latest" {
+		t.Errorf("TYPESAFE_MODEL: got %+v, %v", c, err)
+	}
+	t.Setenv("TYPESAFE_API_KEY", "")
+	t.Setenv("OPENROUTER_API_KEY", "o")
+	if c, err := route(); err != nil || c.Model != "~typesafe/jev-latest" {
+		t.Errorf("TYPESAFE_MODEL on OpenRouter: got %+v, %v", c, err)
+	}
+	t.Setenv("TYPESAFE_MODEL", "")
 
 	// A malformed base fails here, before setup bakes it into every client config.
 	t.Setenv("TYPESAFE_API_KEY", "t")
