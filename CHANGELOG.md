@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.6](https://github.com/itsmostafa/system-one-connector/compare/v0.4.5...v0.4.6) (2026-09-25)
+
+
+### Features
+
+* **setup:** register with Hermes ([1886f20](https://github.com/itsmostafa/system-one-connector/commit/1886f20aefe41a3c65d6368ff865c22d1390944f))
+* **setup:** register with Hermes ([e2ebc7a](https://github.com/itsmostafa/system-one-connector/commit/e2ebc7a71ce49a4f9be441ac4ba3b953555b9b02))
+
 ## [0.4.5](https://github.com/itsmostafa/typesafe-mcp/compare/v0.4.4...v0.4.5) (2026-09-23)
 
 
