@@ -4,7 +4,7 @@
 # Override the target directory with EVALUATE_INSTALL_DIR.
 set -eu
 
-REPO="itsmostafa/typesafe-mcp"
+REPO="itsmostafa/system-one-connector"
 INSTALL_DIR="${EVALUATE_INSTALL_DIR:-$HOME/.local/bin}"
 
 main() {
