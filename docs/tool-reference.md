@@ -9,7 +9,7 @@
 | `state` | yes, unless `items` is set | What to judge: plain text, or a JSON object or array with named fields. Include the observed evidence and the background it is judged against (user goals, policies). Leave out your own conclusion about it. With `items`, `state` is sent to every item as `context`. |
 | `questions` | yes | Map of question ID to `{type, instructions, criteria?}`. Answers come back under the same IDs. |
 | `items` | no | Map of item ID to record. Each record is judged separately. See [Many records](#many-records-items). |
-| `model` | no | Defaults to `TYPESAFE_MODEL` if set, else `jev-latest`; `~typesafe/jev-latest` on OpenRouter. |
+| `model` | no | On the TypeSafe route, defaults to `TYPESAFE_MODEL` if set, else `jev-latest`. On OpenRouter, always `~typesafe/jev-latest`. |
 | `include_item_usage` | no | With `items`, keep each item response's own `model` and `usage`. Default `false`: they are reported once in `meta`. |
 
 A `noul` or `choice` question can also set `min_confidence` (0 to 1), which lets it abstain. `evaluate` applies it and never sends it to the API. When the answer's confidence is below the threshold, the answer gains `"uncertain": true`, and a `choice` answer's `choice` becomes `"__uncertain__"`. Confidence here is the API's `confidence` for a choice and `|2p − 1|` for a noul, which is the same formula with two outcomes. `probabilities` and the `noul` value are kept, so you can still read what Jev leaned toward. `__uncertain__` is reserved and cannot be used as an option name.
