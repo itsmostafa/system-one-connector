@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.7](https://github.com/itsmostafa/system-one-connector/compare/v0.4.6...v0.4.7) (2026-09-25)
+
+
+### Features
+
+* **client:** add TYPESAFE_MODEL to override the default model ([349f981](https://github.com/itsmostafa/system-one-connector/commit/349f981773d0b0a31257bfe0e886fb99da0dae04))
+* **client:** add TYPESAFE_MODEL to override the default model ([2e9fab4](https://github.com/itsmostafa/system-one-connector/commit/2e9fab4c91ad49aad9ff48ba1f405f7c92fd06aa))
+
+
+### Bug Fixes
+
+* **tools:** scope TYPESAFE_MODEL to the TypeSafe route in the model description ([99c23db](https://github.com/itsmostafa/system-one-connector/commit/99c23db1ace0f408a34ea97c7ad48496352403f4))
+
 ## [0.4.6](https://github.com/itsmostafa/system-one-connector/compare/v0.4.5...v0.4.6) (2026-09-25)
 
 
