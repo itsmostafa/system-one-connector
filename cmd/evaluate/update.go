@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const githubRepo = "itsmostafa/typesafe-mcp"
+const githubRepo = "itsmostafa/system-one-connector"
 
 const (
 	// One deadline covers connect, headers and body: a stalled mirror must not

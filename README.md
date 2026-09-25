@@ -1,12 +1,12 @@
-# Typesafe MCP
+# System One Connector
 
 **Give your AI agent answers it can act on: typed judgments with real probabilities, instead of prose it has to parse.**
 
 `evaluate` connects Claude Code, Claude Desktop, Codex, Hermes and [pi](https://pi.dev) to [TypeSafe](https://typesafe.ai)'s Jev model. Your agent asks a question like "is this urgent?" or "which team owns this?" and gets back a number or an option it can use in an `if` statement.
 
-[![Latest release](https://img.shields.io/github/v/release/itsmostafa/typesafe-mcp?sort=semver)](https://github.com/itsmostafa/typesafe-mcp/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/itsmostafa/system-one-connector?sort=semver)](https://github.com/itsmostafa/system-one-connector/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![Go version](https://img.shields.io/github/go-mod/go-version/itsmostafa/typesafe-mcp)
+![Go version](https://img.shields.io/github/go-mod/go-version/itsmostafa/system-one-connector)
 
 ```
   "Help! My payouts have been          ┌──────────┐        is_urgent   0.95
@@ -26,7 +26,7 @@
 **1. Install** (macOS and Linux):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/itsmostafa/typesafe-mcp/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/itsmostafa/system-one-connector/main/install.sh | sh
 ```
 
 **2. Connect your agents** ([get a key](https://console.typesafe.ai/)):

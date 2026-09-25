@@ -51,7 +51,7 @@ func runMCPSetup(ctx context.Context) error {
 	}
 	for _, c := range setupCommands(exe, env) {
 		if _, err := exec.LookPath(c.cli); err != nil {
-			fmt.Printf("➖ %s not found, skipped (`%s` not on PATH; see https://github.com/itsmostafa/typesafe-mcp/blob/main/docs/configuration.md#manual-client-config)\n", c.name, c.cli)
+			fmt.Printf("➖ %s not found, skipped (`%s` not on PATH; see https://github.com/itsmostafa/system-one-connector/blob/main/docs/configuration.md#manual-client-config)\n", c.name, c.cli)
 			continue
 		}
 		fmt.Printf("🔎 %s detected\n", c.name)
@@ -77,7 +77,7 @@ func runMCPSetup(ctx context.Context) error {
 	desktop := false
 	if dir, err := os.UserConfigDir(); err == nil {
 		if _, err := os.Stat(filepath.Join(dir, "Claude")); err != nil {
-			fmt.Println("➖ Claude Desktop not found, skipped (see https://github.com/itsmostafa/typesafe-mcp/blob/main/docs/configuration.md#manual-client-config)")
+			fmt.Println("➖ Claude Desktop not found, skipped (see https://github.com/itsmostafa/system-one-connector/blob/main/docs/configuration.md#manual-client-config)")
 		} else {
 			fmt.Println("🔎 Claude Desktop detected")
 			if err := setupClaudeDesktop(filepath.Join(dir, "Claude", "claude_desktop_config.json"), exe, env); err != nil {
@@ -286,7 +286,7 @@ func runPiSetup() error {
 		return err
 	}
 	if _, err := os.Stat(dir); err != nil {
-		fmt.Println("➖ pi not found, skipped (see https://github.com/itsmostafa/typesafe-mcp/blob/main/docs/configuration.md#pi)")
+		fmt.Println("➖ pi not found, skipped (see https://github.com/itsmostafa/system-one-connector/blob/main/docs/configuration.md#pi)")
 		return nil
 	}
 	fmt.Println("🔎 pi detected")

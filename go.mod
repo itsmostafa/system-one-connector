@@ -1,4 +1,4 @@
-module github.com/itsmostafa/typesafe-mcp
+module github.com/itsmostafa/system-one-connector
 
 go 1.27.1
 

@@ -7,7 +7,7 @@ How to install `evaluate`, choose an API route, and connect it to your agents.
 The install script supports macOS and Linux on amd64 and arm64. It checks the release archive against its published SHA-256 checksum before installing:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/itsmostafa/typesafe-mcp/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/itsmostafa/system-one-connector/main/install.sh | sh
 ```
 
 It installs to `~/.local/bin`, or to `EVALUATE_INSTALL_DIR` if that is set. If the directory is not on your `PATH`, add it:
@@ -19,7 +19,7 @@ export PATH="$HOME/.local/bin:$PATH"
 With Go installed, you can build from source instead:
 
 ```sh
-go install github.com/itsmostafa/typesafe-mcp/cmd/evaluate@latest
+go install github.com/itsmostafa/system-one-connector/cmd/evaluate@latest
 ```
 
 To upgrade, run `evaluate update`. It replaces the binary in place with the latest GitHub release, after verifying its checksum. When a newer release is out, the server tells your agent at startup, so it can remind you. Restart Claude Desktop, or start a new Codex session, to load the new binary.
