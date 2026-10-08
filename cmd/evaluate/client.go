@@ -23,6 +23,8 @@ type Client struct {
 	Backoff time.Duration
 	// MaxItems caps items per tool call; zero means maxItems.
 	MaxItems int
+	// Headers are extra request headers; Authorization and Content-Type win.
+	Headers map[string]string
 }
 
 // Evaluate posts a System One request and returns the raw response JSON.
@@ -38,6 +40,9 @@ func (c *Client) Evaluate(ctx context.Context, req any) ([]byte, error) {
 		r, err := http.NewRequestWithContext(ctx, http.MethodPost, c.URL, bytes.NewReader(body))
 		if err != nil {
 			return nil, err
+		}
+		for k, v := range c.Headers {
+			r.Header.Set(k, v)
 		}
 		r.Header.Set("Authorization", "Bearer "+c.APIKey)
 		r.Header.Set("Content-Type", "application/json")
