@@ -4,6 +4,7 @@ package main
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"os/signal"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -135,6 +137,22 @@ func route() (*Client, error) {
 		}
 		limit = n
 	}
+	// Extra headers, such as OpenRouter's app attribution, also apply on every
+	// route and survive a profile.
+	var headers map[string]string
+	if s := os.Getenv("TYPESAFE_HEADERS"); s != "" {
+		if err := json.Unmarshal([]byte(s), &headers); err != nil {
+			return nil, fmt.Errorf("TYPESAFE_HEADERS must be a JSON object of header names to string values: %w", err)
+		}
+	}
+	// net/http refuses these on every request, so fail before setup bakes them in.
+	for k, v := range headers {
+		badName := k == "" || strings.ContainsFunc(k, func(r rune) bool { return r <= ' ' || r >= 0x7f || strings.ContainsRune(`"(),/:;<=>?@[\]{}`, r) })
+		badValue := strings.ContainsFunc(v, func(r rune) bool { return r < ' ' && r != '\t' || r == 0x7f })
+		if badName || badValue {
+			return nil, fmt.Errorf("TYPESAFE_HEADERS: invalid header name or value for %q", k)
+		}
+	}
 	// A selected profile defines the whole route, ahead of any key a client
 	// config baked in, so `evaluate profile use` switches every client.
 	pr, name, err := selectedProfile()
@@ -146,7 +164,7 @@ func route() (*Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("profile %q base_url %w", name, err)
 		}
-		return &Client{URL: u, APIKey: pr.APIKey, Model: cmp.Or(pr.Model, "jev-latest"), MaxItems: limit}, nil
+		return &Client{URL: u, APIKey: pr.APIKey, Model: cmp.Or(pr.Model, "jev-latest"), MaxItems: limit, Headers: headers}, nil
 	}
 	switch {
 	case os.Getenv("TYPESAFE_API_KEY") != "":
@@ -160,6 +178,7 @@ func route() (*Client, error) {
 			APIKey:   os.Getenv("TYPESAFE_API_KEY"),
 			Model:    cmp.Or(os.Getenv("TYPESAFE_MODEL"), "jev-latest"),
 			MaxItems: limit,
+			Headers:  headers,
 		}, nil
 	case os.Getenv("OPENROUTER_API_KEY") != "":
 		return &Client{
@@ -167,6 +186,7 @@ func route() (*Client, error) {
 			APIKey:   os.Getenv("OPENROUTER_API_KEY"),
 			Model:    "~typesafe/jev-latest",
 			MaxItems: limit,
+			Headers:  headers,
 		}, nil
 	}
 	return nil, errors.New("set TYPESAFE_API_KEY (https://console.typesafe.ai/) or OPENROUTER_API_KEY (https://openrouter.ai/keys)")

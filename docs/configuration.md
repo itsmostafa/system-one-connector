@@ -105,7 +105,7 @@ evaluate profile list
 - Profiles live in `profiles.json` in the `evaluate` folder of your config directory (`~/Library/Application Support` on macOS, `~/.config` on Linux), readable only by you.
 - The server reads the active profile when it starts, so after `profile use`, start a new Claude Code or Codex session, or restart Claude Desktop. You don't need to run setup again.
 - Set `TYPESAFE_PROFILE=name` to pin one client to a profile regardless of which one is active. `evaluate setup mcp` copies it into client configs like any other `TYPESAFE_*` variable.
-- A selected profile replaces `TYPESAFE_API_KEY`, `TYPESAFE_BASE_URL` and `TYPESAFE_MODEL`, including values setup already wrote into your client configs. `TYPESAFE_MAX_ITEMS` still applies. With no profile active (for example, after you `remove` the active one), the environment variables apply as before.
+- A selected profile replaces `TYPESAFE_API_KEY`, `TYPESAFE_BASE_URL` and `TYPESAFE_MODEL`, including values setup already wrote into your client configs. `TYPESAFE_MAX_ITEMS` and `TYPESAFE_HEADERS` still apply. With no profile active (for example, after you `remove` the active one), the environment variables apply as before.
 - Profiles cover hosts that serve `POST /v1/systemone`, plus OpenRouter's Decisions endpoint. A base URL on `openrouter.ai` is used as given rather than getting `/v1/systemone` appended, and a bare `https://openrouter.ai` gets the Decisions path. OpenRouter serves several models, so add one profile per model and always pass `--model`, since the default `jev-latest` is not an OpenRouter model name.
 
 ### Span-01 (Respan)
@@ -133,6 +133,16 @@ The cap applies on both the TypeSafe and OpenRouter routes. It limits each call,
 ```sh
 TYPESAFE_API_KEY=your-key TYPESAFE_MAX_ITEMS=50 evaluate setup mcp
 ```
+
+### Extra request headers
+
+`TYPESAFE_HEADERS` adds HTTP headers to every request `evaluate` sends to the model endpoint. Set it to a JSON object of header names to string values. For example, OpenRouter's [app attribution](https://openrouter.ai/docs/app-attribution) headers:
+
+```sh
+OPENROUTER_API_KEY=your-key TYPESAFE_HEADERS='{"HTTP-Referer":"https://opencode.ai/","X-OpenRouter-Title":"Decisions MCP"}' evaluate setup mcp
+```
+
+The headers apply on every route, including a selected profile. `Authorization` and `Content-Type` are always set by `evaluate`, so entries with those names are ignored. If the value isn't a JSON object of strings, or holds a header name or value HTTP doesn't allow, the server and `evaluate setup mcp` both fail with an error.
 
 ## `evaluate setup mcp`
 
@@ -171,7 +181,7 @@ To use any other MCP client, point it at:
 /absolute/path/to/evaluate mcp
 ```
 
-Put `TYPESAFE_API_KEY` or `OPENROUTER_API_KEY` in the server's `env`, or leave `env` empty and use a [profile](#profiles). Add `TYPESAFE_BASE_URL` if you use a custom host, `TYPESAFE_MODEL` if that host serves a model other than `jev-latest`, and `TYPESAFE_MAX_ITEMS` to [cap items per call](#capping-items-per-call). For example:
+Put `TYPESAFE_API_KEY` or `OPENROUTER_API_KEY` in the server's `env`, or leave `env` empty and use a [profile](#profiles). Add `TYPESAFE_BASE_URL` if you use a custom host, `TYPESAFE_MODEL` if that host serves a model other than `jev-latest`, `TYPESAFE_MAX_ITEMS` to [cap items per call](#capping-items-per-call), and `TYPESAFE_HEADERS` to [send extra headers](#extra-request-headers). For example:
 
 ```json
 {

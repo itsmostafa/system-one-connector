@@ -27,8 +27,8 @@ func TestEvaluate(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		if r.URL.Path != "/v1/systemone" || r.Header.Get("Authorization") != "Bearer k" {
-			t.Errorf("bad request: %s %q", r.URL.Path, r.Header.Get("Authorization"))
+		if r.URL.Path != "/v1/systemone" || r.Header.Get("Authorization") != "Bearer k" || r.Header.Get("HTTP-Referer") != "https://opencode.ai/" {
+			t.Errorf("bad request: %s %v", r.URL.Path, r.Header)
 		}
 		var in evaluateIn
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -48,7 +48,9 @@ func TestEvaluate(t *testing.T) {
 		w.Write([]byte(`{"model":"` + in.Model + `","answers":{"q":{"type":"noul","noul":0.9}}}`))
 	}))
 	defer srv.Close()
-	c := &Client{URL: srv.URL + "/v1/systemone", APIKey: "k", HTTP: srv.Client()}
+	// A custom Authorization must not displace the key.
+	headers := map[string]string{"HTTP-Referer": "https://opencode.ai/", "authorization": "Bearer other"}
+	c := &Client{URL: srv.URL + "/v1/systemone", APIKey: "k", HTTP: srv.Client(), Headers: headers}
 	req := evaluateIn{Model: "jev-latest", Questions: map[string]question{"q": {Type: "noul", Instructions: "urgent?"}}}
 
 	req.State = "busy"
@@ -114,6 +116,7 @@ func isolateProfiles(t *testing.T) {
 
 func TestRoute(t *testing.T) {
 	isolateProfiles(t)
+	t.Setenv("TYPESAFE_HEADERS", "")
 	for _, tc := range []struct{ typesafe, openrouter, base, url, model, key string }{
 		{"t", "", "", "https://api.typesafe.ai/v1/systemone", "jev-latest", "t"},
 		{"", "o", "", "https://openrouter.ai/api/alpha/decisions", "~typesafe/jev-latest", "o"},
@@ -192,6 +195,20 @@ func TestRoute(t *testing.T) {
 	}
 	t.Setenv("TYPESAFE_MAX_ITEMS", "")
 
+	// TYPESAFE_HEADERS likewise applies on either route and fails here when it is
+	// not a JSON object of strings.
+	t.Setenv("TYPESAFE_HEADERS", `{"HTTP-Referer":"https://opencode.ai/","X-OpenRouter-Title":"Decisions MCP"}`)
+	if c, err := route(); err != nil || c.Headers["X-OpenRouter-Title"] != "Decisions MCP" {
+		t.Errorf("TYPESAFE_HEADERS: got %+v, %v", c, err)
+	}
+	for _, v := range []string{"HTTP-Referer: x", `["x"]`, `{"X-N":1}`, `{"Bad Name":"x"}`, `{"":"x"}`, `{"X-N":"a\r\nb"}`} {
+		t.Setenv("TYPESAFE_HEADERS", v)
+		if _, err := route(); err == nil {
+			t.Errorf("TYPESAFE_HEADERS=%q: want error", v)
+		}
+	}
+	t.Setenv("TYPESAFE_HEADERS", "")
+
 	// No keys at all: route fails before it ever looks at the base.
 	t.Setenv("TYPESAFE_API_KEY", "")
 	t.Setenv("OPENROUTER_API_KEY", "")
@@ -207,6 +224,7 @@ func TestProfiles(t *testing.T) {
 	t.Setenv("TYPESAFE_MODEL", "")
 	t.Setenv("OPENROUTER_API_KEY", "")
 	t.Setenv("TYPESAFE_MAX_ITEMS", "")
+	t.Setenv("TYPESAFE_HEADERS", "")
 	run := func(args ...string) (string, error) {
 		cmd := newRootCmd()
 		var out bytes.Buffer
