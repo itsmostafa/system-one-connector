@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.12](https://github.com/itsmostafa/system-one-connector/compare/v0.4.11...v0.4.12) (2026-10-08)
+
+
+### Features
+
+* **client:** send extra request headers from TYPESAFE_HEADERS ([e2fcc02](https://github.com/itsmostafa/system-one-connector/commit/e2fcc02c39015daf7ef9cd6854daa5fd10edb481))
+* **client:** send extra request headers from TYPESAFE_HEADERS ([adca31b](https://github.com/itsmostafa/system-one-connector/commit/adca31b71e48d90ac0d08b05df0ae4c752560591)), closes [#53](https://github.com/itsmostafa/system-one-connector/issues/53)
+
 ## [0.4.11](https://github.com/itsmostafa/system-one-connector/compare/v0.4.10...v0.4.11) (2026-10-04)
 
 
