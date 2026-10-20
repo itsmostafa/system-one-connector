@@ -47,19 +47,15 @@ func score(args []string) error {
 	}
 	qs := su.Questions
 	files, _ := filepath.Glob(filepath.Join(resultsDir(su.Name), "*.jsonl"))
-	var order []string
-	groups := map[string][]pass{}
+	var ps []pass
 	for _, f := range files {
 		p, err := readPass(f)
 		if err != nil {
 			return err
 		}
-		base := passSuffix.ReplaceAllString(p.Name, "")
-		if groups[base] == nil {
-			order = append(order, base)
-		}
-		groups[base] = append(groups[base], p)
+		ps = append(ps, p)
 	}
+	order, groups := groupPasses(os.Stderr, su, ps)
 	// Grade against the current keys, not the ones saved with the run.
 	byID := map[string]question{}
 	for _, q := range qs {
@@ -80,6 +76,31 @@ func score(args []string) error {
 	}
 	writeMarkdown(os.Stdout, su, sums, *baseline)
 	return nil
+}
+
+// groupPasses folds repeat passes of one run together. A pass recorded at
+// another commit than the suite pins is skipped with a warning, since its
+// paths and symbols may not exist at this revision. Passes limited to fewer
+// questions form their own group, so a smoke run never averages with full
+// passes.
+func groupPasses(warn io.Writer, su *suite, ps []pass) ([]string, map[string][]pass) {
+	var order []string
+	groups := map[string][]pass{}
+	for _, p := range ps {
+		if p.Meta.Commit != su.Commit {
+			fmt.Fprintf(warn, "codenav: skipping %s: run at commit %.7s, suite %s pins %.7s\n", p.Name, p.Meta.Commit, su.Name, su.Commit)
+			continue
+		}
+		key := passSuffix.ReplaceAllString(p.Name, "")
+		if l := p.Meta.Limit; l > 0 && l < len(su.Questions) {
+			key += fmt.Sprintf(" (first %d)", l)
+		}
+		if groups[key] == nil {
+			order = append(order, key)
+		}
+		groups[key] = append(groups[key], p)
+	}
+	return order, groups
 }
 
 func readPass(path string) (pass, error) {

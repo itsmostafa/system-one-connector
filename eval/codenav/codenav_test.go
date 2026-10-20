@@ -225,6 +225,32 @@ func TestSummarize(t *testing.T) {
 	}
 }
 
+// TestGroupPasses checks that passes from another commit are skipped and
+// that a limited smoke run is kept apart from full passes of the same name.
+func TestGroupPasses(t *testing.T) {
+	su := &suite{Name: "s", Commit: "abc1234def", Questions: make([]question, 30)}
+	at := func(name, commit string, limit int) pass {
+		return pass{Name: name, Meta: runMeta{Commit: commit, Limit: limit}}
+	}
+	var warn strings.Builder
+	order, groups := groupPasses(&warn, su, []pass{
+		at("d1.p1", su.Commit, 3),
+		at("d1.p2", su.Commit, 0),
+		at("d1.p3", su.Commit, 0),
+		at("d1.p4", "0ld0000000", 0),
+		at("jev.p1", su.Commit, 30),
+	})
+	if want := []string{"d1 (first 3)", "d1", "jev"}; !slices.Equal(order, want) {
+		t.Fatalf("order = %v, want %v", order, want)
+	}
+	if len(groups["d1"]) != 2 || len(groups["d1 (first 3)"]) != 1 {
+		t.Errorf("groups = %v", groups)
+	}
+	if !strings.Contains(warn.String(), "skipping d1.p4") {
+		t.Errorf("warning = %q", warn.String())
+	}
+}
+
 // TestAnswerKeys checks every suite's accepted files and symbols exist in its
 // pinned checkout, so a key cannot silently name a place no search could
 // reach. Suites without a checkout are skipped.
