@@ -2,8 +2,6 @@ package main
 
 import (
 	"math"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 )
 
@@ -105,37 +103,5 @@ func TestCostPer100(t *testing.T) {
 	passes := []runMeta{{Calls: calls}, {Price: p, Calls: calls}, {Price: p2, Calls: calls}}
 	if got, ok := costPer100(passes); !ok || math.Abs(got-0.015) > 1e-12 {
 		t.Errorf("costPer100 over passes = %v, %v; want 0.015, true", got, ok)
-	}
-}
-
-func TestMatchPrice(t *testing.T) {
-	models := []orModel{
-		{ID: "liquid/d1", CanonicalSlug: "liquid/d1-20260930"},
-		{ID: "typesafe/jev-router", CanonicalSlug: "typesafe/jev-router"},
-	}
-	models[0].Pricing.Prompt, models[0].Pricing.Completion = "0.00000004", "0"
-	models[1].Pricing.Prompt, models[1].Pricing.Completion = "-1", "-1"
-	for _, model := range []string{"liquid/d1", "liquid/d1-20260930"} {
-		if p, err := matchPrice(models, model); err != nil || p.ID != "liquid/d1" || p.Prompt != 4e-8 {
-			t.Errorf("matchPrice(%q) = %+v, %v; want liquid/d1 at 4e-8", model, p, err)
-		}
-	}
-	for _, model := range []string{"jev-1.13.0", "typesafe/jev-router"} {
-		if p, err := matchPrice(models, model); err == nil {
-			t.Errorf("matchPrice(%q) = %+v, want an error", model, p)
-		}
-	}
-}
-
-func TestFetchPrice(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte(`{"data":[{"id":"cloudflare/clef","canonical_slug":"cloudflare/clef","pricing":{"prompt":"0.00000024","completion":"0"}}]}`))
-	}))
-	defer srv.Close()
-	defer func(u string) { openRouterModels = u }(openRouterModels)
-	openRouterModels = srv.URL
-	p, err := fetchPrice("cloudflare/clef")
-	if err != nil || p.Prompt != 2.4e-7 || p.FetchedAt == "" {
-		t.Errorf("fetchPrice = %+v, %v", p, err)
 	}
 }

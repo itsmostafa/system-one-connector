@@ -1,0 +1,615 @@
+{
+  "repo": "https://github.com/vllm-project/vllm",
+  "commit": "b1ab16c548f114a40c0451de0d6c18d4d832e1de",
+  "questions": [
+    {
+      "id": "scheduler-step",
+      "question": "Where does the scheduler decide which requests run in the next step?",
+      "answers": [
+        {
+          "path": "vllm/v1/core/sched/scheduler.py",
+          "symbols": [
+            "Scheduler.schedule"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "preemption",
+      "question": "When the KV cache runs out of space, where is a running request pushed back to the waiting queue?",
+      "answers": [
+        {
+          "path": "vllm/v1/core/sched/scheduler.py",
+          "symbols": [
+            "Scheduler._preempt_request",
+            "Scheduler.schedule"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "allocate-blocks",
+      "question": "Where are KV cache blocks allocated for a request's new tokens?",
+      "answers": [
+        {
+          "path": "vllm/v1/core/kv_cache_manager.py",
+          "symbols": [
+            "KVCacheManager.allocate_slots"
+          ]
+        },
+        {
+          "path": "vllm/v1/core/block_pool.py",
+          "symbols": [
+            "BlockPool.get_new_blocks"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prefix-cache-hit",
+      "question": "Where does a new request find blocks it can reuse from the prefix cache?",
+      "answers": [
+        {
+          "path": "vllm/v1/core/kv_cache_manager.py",
+          "symbols": [
+            "KVCacheManager.get_computed_blocks"
+          ]
+        },
+        {
+          "path": "vllm/v1/core/block_pool.py",
+          "symbols": [
+            "BlockPool.get_cached_block"
+          ]
+        },
+        {
+          "path": "vllm/v1/core/kv_cache_coordinator.py",
+          "symbols": [
+            "KVCacheCoordinator.find_longest_cache_hit",
+            "UnitaryKVCacheCoordinator.find_longest_cache_hit",
+            "HybridKVCacheCoordinator.find_longest_cache_hit"
+          ]
+        },
+        {
+          "path": "vllm/v1/core/single_type_kv_cache_manager.py",
+          "symbols": [
+            "SingleTypeKVCacheManager.find_longest_cache_hit",
+            "FullAttentionManager.find_longest_cache_hit"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "block-hash",
+      "question": "How is the hash of a full block of tokens computed for prefix caching?",
+      "answers": [
+        {
+          "path": "vllm/v1/core/kv_cache_utils.py",
+          "symbols": [
+            "hash_block_tokens"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-k-top-p",
+      "question": "Which class applies top-k and top-p filtering when sampling?",
+      "answers": [
+        {
+          "path": "vllm/v1/sample/ops/topk_topp_sampler.py",
+          "symbols": [
+            "TopKTopPSampler",
+            "TopKTopPSampler.forward_native",
+            "TopKTopPSampler.forward_cuda",
+            "apply_top_k_top_p",
+            "apply_top_k_top_p_pytorch"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "penalties",
+      "question": "Where are repetition, frequency and presence penalties applied to the logits?",
+      "answers": [
+        {
+          "path": "vllm/v1/sample/ops/penalties.py",
+          "symbols": [
+            "apply_all_penalties"
+          ]
+        },
+        {
+          "path": "vllm/model_executor/layers/utils.py",
+          "symbols": [
+            "apply_penalties"
+          ]
+        },
+        {
+          "path": "vllm/v1/worker/gpu/sample/penalties.py",
+          "symbols": [
+            "apply_penalties"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sampling-params-check",
+      "question": "Where are sampling parameters checked for invalid values, such as a negative temperature?",
+      "answers": [
+        {
+          "path": "vllm/sampling_params.py",
+          "symbols": [
+            "SamplingParams._verify_args"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "stop-strings",
+      "question": "Where is newly generated text checked for a stop string so the request can finish?",
+      "answers": [
+        {
+          "path": "vllm/v1/engine/detokenizer.py",
+          "symbols": [
+            "check_stop_strings",
+            "BaseIncrementalDetokenizer.update"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "logprobs",
+      "question": "Where are log probabilities computed for the sampled tokens?",
+      "answers": [
+        {
+          "path": "vllm/v1/sample/sampler.py",
+          "symbols": [
+            "Sampler.compute_logprobs",
+            "Sampler.gather_logprobs"
+          ]
+        },
+        {
+          "path": "vllm/v1/worker/gpu/sample/logprob.py",
+          "symbols": [
+            "compute_token_logprobs",
+            "compute_topk_scores"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chat-completions",
+      "question": "Where does the OpenAI-compatible server handle a chat completions request?",
+      "answers": [
+        {
+          "path": "vllm/entrypoints/openai/chat_completion/serving.py",
+          "symbols": [
+            "OpenAIServingChat",
+            "OpenAIServingChat.create_chat_completion"
+          ]
+        },
+        {
+          "path": "vllm/entrypoints/openai/chat_completion/api_router.py",
+          "symbols": [
+            "create_chat_completion"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "api-key",
+      "question": "Where does the server reject requests that don't carry the right API key?",
+      "answers": [
+        {
+          "path": "vllm/entrypoints/serve/middleware/authenticate.py",
+          "symbols": [
+            "AuthenticationMiddleware",
+            "AuthenticationMiddleware.verify_token",
+            "AuthenticationMiddleware.__call__"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chat-template",
+      "question": "Where is a model's chat template applied to the messages in a chat request?",
+      "answers": [
+        {
+          "path": "vllm/renderers/hf.py",
+          "symbols": [
+            "safe_apply_chat_template",
+            "HfRenderer.render_messages"
+          ]
+        },
+        {
+          "path": "vllm/renderers/base.py",
+          "symbols": [
+            "BaseRenderer.render_messages",
+            "BaseRenderer.render_chat"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hermes-tool-calls",
+      "question": "How are tool calls pulled out of a Hermes-format model's output?",
+      "answers": [
+        {
+          "path": "vllm/tool_parsers/hermes_tool_parser.py",
+          "symbols": [
+            "Hermes2ProToolParser",
+            "Hermes2ProToolParser.extract_tool_calls",
+            "Hermes2ProToolParser.extract_tool_calls_streaming"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "deepseek-r1-reasoning",
+      "question": "How does vLLM separate DeepSeek R1's reasoning from its final answer?",
+      "answers": [
+        {
+          "path": "vllm/reasoning/deepseek_r1_reasoning_parser.py"
+        },
+        {
+          "path": "vllm/reasoning/basic_parsers.py",
+          "symbols": [
+            "BaseThinkingReasoningParser",
+            "BaseThinkingReasoningParser.extract_reasoning",
+            "BaseThinkingReasoningParser.extract_reasoning_streaming"
+          ]
+        },
+        {
+          "path": "docs/features/reasoning_outputs.md",
+          "symbols": [
+            "Reasoning Outputs",
+            "Quickstart"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "json-schema-mask",
+      "question": "With structured outputs, where are tokens that would break the requested JSON schema masked out?",
+      "answers": [
+        {
+          "path": "vllm/v1/structured_output/utils.py",
+          "symbols": [
+            "apply_grammar_bitmask"
+          ]
+        },
+        {
+          "path": "vllm/v1/worker/gpu/structured_outputs.py",
+          "symbols": [
+            "StructuredOutputsWorker.apply_grammar_bitmask"
+          ]
+        },
+        {
+          "path": "vllm/v1/structured_output/__init__.py",
+          "symbols": [
+            "StructuredOutputManager.grammar_bitmask"
+          ]
+        },
+        {
+          "path": "vllm/v1/structured_output/backend_xgrammar.py",
+          "symbols": [
+            "XgrammarGrammar.fill_bitmask"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "eagle-drafts",
+      "question": "How does the EAGLE drafter propose speculative tokens?",
+      "answers": [
+        {
+          "path": "vllm/v1/spec_decode/eagle.py",
+          "symbols": [
+            "EagleProposer"
+          ]
+        },
+        {
+          "path": "vllm/v1/spec_decode/llm_base_proposer.py",
+          "symbols": [
+            "SpecDecodeBaseProposer.propose"
+          ]
+        },
+        {
+          "path": "vllm/v1/worker/gpu/spec_decode/eagle/speculator.py",
+          "symbols": [
+            "EagleSpeculator"
+          ]
+        },
+        {
+          "path": "vllm/v1/worker/gpu/spec_decode/target_dependent_ar/speculator.py",
+          "symbols": [
+            "TargetDependentARSpeculator.propose"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "verify-drafts",
+      "question": "In speculative decoding, where are draft tokens accepted or rejected against the target model?",
+      "answers": [
+        {
+          "path": "vllm/v1/sample/rejection_sampler.py",
+          "symbols": [
+            "RejectionSampler",
+            "RejectionSampler.forward",
+            "rejection_sample"
+          ]
+        },
+        {
+          "path": "vllm/v1/worker/gpu/spec_decode/rejection_sampler.py",
+          "symbols": [
+            "RejectionSampler",
+            "RejectionSampler.__call__"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ngram-drafts",
+      "question": "How does n-gram speculative decoding find draft tokens in the prompt?",
+      "answers": [
+        {
+          "path": "vllm/v1/spec_decode/ngram_proposer.py",
+          "symbols": [
+            "NgramProposer",
+            "NgramProposer.propose",
+            "batch_propose_numba",
+            "_find_longest_matched_ngram_and_propose_tokens"
+          ]
+        },
+        {
+          "path": "vllm/v1/spec_decode/ngram_proposer_gpu.py",
+          "symbols": [
+            "NgramGPUKernel",
+            "NgramProposerGPU"
+          ]
+        },
+        {
+          "path": "vllm/v1/worker/gpu/spec_decode/ngram/speculator.py",
+          "symbols": [
+            "NgramGPUSpeculator",
+            "NgramGPUSpeculator.propose"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lora-load",
+      "question": "Where is a saved LoRA adapter loaded from its folder on disk?",
+      "answers": [
+        {
+          "path": "vllm/lora/lora_model.py",
+          "symbols": [
+            "LoRAModel.from_local_checkpoint"
+          ]
+        },
+        {
+          "path": "vllm/lora/worker_manager.py",
+          "symbols": [
+            "WorkerLoRAManager._load_adapter"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "safetensors",
+      "question": "How are model weights read from safetensors files?",
+      "answers": [
+        {
+          "path": "vllm/model_executor/model_loader/weight_utils.py",
+          "symbols": [
+            "safetensors_weights_iterator"
+          ]
+        },
+        {
+          "path": "vllm/model_executor/model_loader/default_loader.py",
+          "symbols": [
+            "DefaultModelLoader._get_weights_iterator"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "attention-backend",
+      "question": "Where does vLLM choose which attention backend to use on an NVIDIA GPU?",
+      "answers": [
+        {
+          "path": "vllm/platforms/cuda.py",
+          "symbols": [
+            "CudaPlatformBase.get_attn_backend_cls"
+          ]
+        },
+        {
+          "path": "vllm/v1/attention/selector.py",
+          "symbols": [
+            "get_attn_backend",
+            "_cached_get_attn_backend"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cuda-graphs",
+      "question": "Where are CUDA graphs captured before the server starts taking requests?",
+      "answers": [
+        {
+          "path": "vllm/v1/worker/gpu_model_runner.py",
+          "symbols": [
+            "GPUModelRunner.capture_model",
+            "GPUModelRunner._capture_cudagraphs"
+          ]
+        },
+        {
+          "path": "vllm/v1/worker/gpu/model_runner.py",
+          "symbols": [
+            "GPUModelRunner.capture_model"
+          ]
+        },
+        {
+          "path": "vllm/v1/worker/gpu/cudagraph_utils.py",
+          "symbols": [
+            "CudaGraphManager.capture",
+            "ModelCudaGraphManager.capture"
+          ]
+        },
+        {
+          "path": "vllm/compilation/cuda_graph.py",
+          "symbols": [
+            "CUDAGraphWrapper",
+            "CUDAGraphWrapper.__call__"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tensor-parallel-all-reduce",
+      "question": "Where are partial results summed across the GPUs in tensor parallelism?",
+      "answers": [
+        {
+          "path": "vllm/distributed/communication_op.py",
+          "symbols": [
+            "tensor_model_parallel_all_reduce"
+          ]
+        },
+        {
+          "path": "vllm/distributed/parallel_state.py",
+          "symbols": [
+            "GroupCoordinator.all_reduce",
+            "GroupCoordinator._all_reduce_out_place",
+            "all_reduce"
+          ]
+        },
+        {
+          "path": "vllm/distributed/device_communicators/cuda_communicator.py",
+          "symbols": [
+            "CudaCommunicator.all_reduce"
+          ]
+        },
+        {
+          "path": "vllm/distributed/device_communicators/custom_all_reduce.py",
+          "symbols": [
+            "CustomAllreduce.all_reduce"
+          ]
+        },
+        {
+          "path": "vllm/model_executor/layers/linear.py",
+          "symbols": [
+            "RowParallelLinear",
+            "RowParallelLinear.forward"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "moe-routing",
+      "question": "Which function picks the top experts for each token in a mixture-of-experts layer?",
+      "answers": [
+        {
+          "path": "vllm/model_executor/layers/fused_moe/router/fused_topk_router.py",
+          "symbols": [
+            "fused_topk"
+          ]
+        },
+        {
+          "path": "vllm/model_executor/layers/fused_moe/router/grouped_topk_router.py",
+          "symbols": [
+            "grouped_topk"
+          ]
+        },
+        {
+          "path": "vllm/model_executor/layers/fused_moe/router/fused_moe_router.py",
+          "symbols": [
+            "FusedMoERouter.select_experts"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "model-registry",
+      "question": "How does vLLM map a model's architecture name to the class that implements it?",
+      "answers": [
+        {
+          "path": "vllm/model_executor/models/registry.py",
+          "symbols": [
+            "_ModelRegistry",
+            "_ModelRegistry.resolve_model_cls",
+            "_ModelRegistry._try_load_model_cls"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prompt-too-long",
+      "question": "Where is a prompt rejected for being longer than the model's maximum length?",
+      "answers": [
+        {
+          "path": "vllm/v1/engine/input_processor.py",
+          "symbols": [
+            "InputProcessor._validate_prompt_len",
+            "InputProcessor._validate_model_input",
+            "InputProcessor._validate_model_inputs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prometheus-metrics",
+      "question": "Where are vLLM's engine metrics for Prometheus, such as time to first token, created?",
+      "answers": [
+        {
+          "path": "vllm/v1/metrics/loggers.py",
+          "symbols": [
+            "PrometheusStatLogger",
+            "PrometheusStatLogger.__init__"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sleep-mode",
+      "question": "How do I free GPU memory by putting the engine to sleep and waking it up later?",
+      "answers": [
+        {
+          "path": "docs/features/sleep_mode.md"
+        },
+        {
+          "path": "vllm/entrypoints/llm.py",
+          "symbols": [
+            "LLM.sleep",
+            "LLM.wake_up"
+          ]
+        },
+        {
+          "path": "vllm/v1/worker/gpu_worker.py",
+          "symbols": [
+            "Worker.sleep",
+            "Worker.wake_up"
+          ]
+        },
+        {
+          "path": "vllm/device_allocator/cumem.py",
+          "symbols": [
+            "CuMemAllocator.sleep",
+            "CuMemAllocator.wake_up"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enable-prefix-caching",
+      "question": "How do I turn on automatic prefix caching?",
+      "answers": [
+        {
+          "path": "docs/features/automatic_prefix_caching.md",
+          "symbols": [
+            "Automatic Prefix Caching",
+            "Enabling APC in vLLM"
+          ]
+        }
+      ]
+    }
+  ]
+}

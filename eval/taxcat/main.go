@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/itsmostafa/system-one-connector/eval/internal/openrouter"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -270,7 +271,7 @@ func run(args []string) error {
 		if start == 0 {
 			var m struct{ Model string }
 			json.Unmarshal(reply.Meta, &m)
-			if cost, err = fetchPrice(m.Model); err != nil {
+			if cost, err = openrouter.Fetch(m.Model); err != nil {
 				fmt.Fprintf(os.Stderr, "%s: no price saved, cost will show as —: %v\n", *name, err)
 			}
 		}
