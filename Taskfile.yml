@@ -66,6 +66,29 @@ tasks:
     cmds:
       - go run ./taxcat score
 
+  eval:codenav:fetch:
+    desc: Fetch a code-search suite's repository at its pinned commit (SUITE=transformers|vllm)
+    dir: eval
+    cmds:
+      - go run ./codenav fetch -suite {{.SUITE | default "transformers"}}
+
+  eval:codenav:
+    desc: Run a code-search suite for one profile (SUITE=transformers|vllm, PROFILE=d1, LIMIT=3 for a smoke run, NAME=d1.p1 to name a pass)
+    deps: [build]
+    dir: eval
+    cmds:
+      - task: eval:codenav:fetch
+        vars: {SUITE: "{{.SUITE}}"}
+      - go run ./codenav run -suite {{.SUITE | default "transformers"}} -profile {{.PROFILE}} -limit {{.LIMIT | default 0}}{{if .NAME}} -name {{.NAME}}{{end}}
+    requires:
+      vars: [PROFILE]
+
+  eval:codenav:score:
+    desc: Score every saved run of a code-search suite as Markdown (SUITE=transformers|vllm, BASELINE=d1 for the cost multiple)
+    dir: eval
+    cmds:
+      - go run ./codenav score -suite {{.SUITE | default "transformers"}} -baseline {{.BASELINE | default "d1"}}
+
   tidy:
     desc: Tidy go.mod
     cmds:

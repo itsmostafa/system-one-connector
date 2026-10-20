@@ -1,0 +1,237 @@
+{
+  "repo": "https://github.com/huggingface/transformers",
+  "commit": "469230357aab0f2b303b0d638c1f8d06edb14184",
+  "source": "https://d1.liquid.ai/#/code",
+  "questions": [
+    {
+      "id": "bert-self-attention",
+      "question": "Where is self-attention computed in BERT?",
+      "answers": [
+        {
+          "path": "src/transformers/models/bert/modeling_bert.py",
+          "symbols": [
+            "eager_attention_forward",
+            "BertSelfAttention",
+            "BertSelfAttention.forward"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "trainer-lr-scheduler",
+      "question": "Where does the Trainer create the learning rate scheduler?",
+      "answers": [
+        {
+          "path": "src/transformers/trainer.py",
+          "symbols": [
+            "Trainer.create_scheduler"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-p-filtering",
+      "question": "Which class applies top-p filtering to the logits?",
+      "answers": [
+        {
+          "path": "src/transformers/generation/logits_process.py",
+          "symbols": [
+            "TopPLogitsWarper",
+            "TopPLogitsWarper.__call__"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tokenizer-pad-batch",
+      "question": "Where does the tokenizer pad a batch?",
+      "answers": [
+        {
+          "path": "src/transformers/tokenization_utils_base.py",
+          "symbols": [
+            "PreTrainedTokenizerBase.pad",
+            "PreTrainedTokenizerBase._pad"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lora-load-adapter",
+      "question": "How are LoRA adapters loaded into a model?",
+      "answers": [
+        {
+          "path": "src/transformers/integrations/peft.py",
+          "symbols": [
+            "PeftAdapterMixin.load_adapter"
+          ]
+        },
+        {
+          "path": "docs/source/en/peft.md",
+          "symbols": [
+            "Loading an adapter"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "load-4bit",
+      "question": "How do I load a model in 4-bit?",
+      "answers": [
+        {
+          "path": "docs/source/*/quantization/bitsandbytes.md"
+        },
+        {
+          "path": "src/transformers/utils/quantization_config.py",
+          "symbols": [
+            "BitsAndBytesConfig",
+            "BitsAndBytesConfig.__init__",
+            "BitsAndBytesConfig.load_in_4bit"
+          ]
+        },
+        {
+          "path": "src/transformers/quantizers/quantizer_bnb_4bit.py"
+        }
+      ]
+    },
+    {
+      "id": "decoding-strategy",
+      "question": "Where does generation decide between greedy search, sampling and beam search?",
+      "answers": [
+        {
+          "path": "src/transformers/generation/configuration_utils.py",
+          "symbols": [
+            "GenerationConfig.get_generation_mode"
+          ]
+        },
+        {
+          "path": "src/transformers/generation/utils.py",
+          "symbols": [
+            "GenerationMixin.generate"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resize-embeddings",
+      "question": "Where are a model's token embeddings resized after new tokens are added to the tokenizer?",
+      "answers": [
+        {
+          "path": "src/transformers/modeling_utils.py",
+          "symbols": [
+            "PreTrainedModel.resize_token_embeddings",
+            "PreTrainedModel._resize_token_embeddings",
+            "PreTrainedModel._get_resized_embeddings"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pipeline-default-model",
+      "question": "Which function picks the default model when a pipeline is created with only a task name?",
+      "answers": [
+        {
+          "path": "src/transformers/pipelines/base.py",
+          "symbols": [
+            "get_default_model_and_revision"
+          ]
+        },
+        {
+          "path": "src/transformers/pipelines/__init__.py",
+          "symbols": [
+            "pipeline"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mlm-masking",
+      "question": "Which data collator randomly masks tokens for masked language modeling?",
+      "answers": [
+        {
+          "path": "src/transformers/data/data_collator.py",
+          "symbols": [
+            "DataCollatorForLanguageModeling",
+            "DataCollatorForLanguageModeling.torch_mask_tokens",
+            "DataCollatorForLanguageModeling.numpy_mask_tokens",
+            "DataCollatorForLanguageModeling.torch_call"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gradient-clipping",
+      "question": "Where does the Trainer clip gradients?",
+      "answers": [
+        {
+          "path": "src/transformers/trainer.py",
+          "symbols": [
+            "Trainer._clip_grad_norm",
+            "Trainer._run_epoch"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "llama-rotary",
+      "question": "How is rotary position embedding applied to the queries and keys in Llama?",
+      "answers": [
+        {
+          "path": "src/transformers/models/llama/modeling_llama.py",
+          "symbols": [
+            "apply_rotary_pos_emb",
+            "rotate_half"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "max-length-stop",
+      "question": "What stops generation once the output reaches the maximum length?",
+      "answers": [
+        {
+          "path": "src/transformers/generation/stopping_criteria.py",
+          "symbols": [
+            "MaxLengthCriteria",
+            "MaxLengthCriteria.__call__"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "early-stopping",
+      "question": "Where is early stopping on an evaluation metric implemented?",
+      "answers": [
+        {
+          "path": "src/transformers/trainer_callback.py",
+          "symbols": [
+            "EarlyStoppingCallback",
+            "EarlyStoppingCallback.on_evaluate",
+            "EarlyStoppingCallback.check_metric_value"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "causal-mask",
+      "question": "Where is the causal attention mask built?",
+      "answers": [
+        {
+          "path": "src/transformers/masking_utils.py",
+          "symbols": [
+            "create_causal_mask",
+            "causal_mask_function",
+            "sdpa_mask",
+            "eager_mask"
+          ]
+        },
+        {
+          "path": "src/transformers/modeling_attn_mask_utils.py",
+          "symbols": [
+            "AttentionMaskConverter._make_causal_mask",
+            "AttentionMaskConverter.to_causal_4d"
+          ]
+        }
+      ]
+    }
+  ]
+}
