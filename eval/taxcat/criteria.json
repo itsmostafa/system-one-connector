@@ -1,13 +1,12 @@
 {
   "wage_income": "Pay from an employer: payroll direct deposits and paychecks, including deposits from payroll processors such as ADP or Gusto. Not interest, refunds, or transfers from your own accounts.",
-  "interest_income": "Interest or dividends credited by a bank, credit union, or savings account (reported on a 1099-INT). Not interest charged to you on a loan or credit card.",
-  "medical": "Payments for medical, dental, vision, or mental-health care that a US taxpayer can count as a Schedule A medical expense: doctors, dentists, hospitals, labs, urgent care, therapists, prescriptions, medical supplies, and health or dental insurance premiums. Not gyms, spas, massage, supplements, or general retail.",
+  "interest_income": "Interest or dividends credited by a bank, credit union, brokerage cash account, or money market fund (reported on a 1099-INT or 1099-DIV). Not interest charged to you on a loan or credit card.",
+  "medical": "Payments for medical, dental, vision, or mental-health care that a US taxpayer can count as a Schedule A medical expense: doctors, dentists, hospitals, labs, urgent care, therapists, prescriptions, medical supplies, and health or dental insurance premiums. Not veterinary or pet care, gyms, spas, massage, supplements, or general retail.",
   "charitable": "Donations to a qualified US charity, religious organization, or nonprofit (Schedule A charitable gifts). Not membership fees, kids' sports clubs, tickets, or payments that buy goods or services.",
   "state_local_tax": "Payments to a state or local government for income tax or property tax (Schedule A state and local taxes). Not DMV fees, parking tickets, permits, or other government fees.",
   "federal_tax": "Payments to the IRS or US Treasury for federal income tax: estimated payments, balance due, installment agreements. Not tax-preparation software or services.",
   "education": "Tuition and required fees paid to a college, university, or other eligible postsecondary school, directly or through its bursar or payment portal (Form 1098-T). Not online courses from companies, kids' classes, books, or student loan payments.",
   "student_loan_interest": "Payments to a student loan servicer or lender (Form 1098-E). Not tuition paid to a school.",
   "transfer": "Money moved between the payer's own accounts, not a purchase or income: credit card payments, transfers between bank or brokerage accounts, cash withdrawals, payment-app balance moves.",
-  "personal": "Everyday personal spending with no US tax treatment: groceries, restaurants, shopping, travel, rent, utilities, phone, subscriptions, software, car costs and car insurance, gyms, personal care, entertainment, bank fees, and interest charged on credit cards.",
-  "none_of_these": "The payee name and amount are not enough to tell which of the other categories applies."
+  "personal": "Everyday personal spending with no US tax treatment: groceries, restaurants, shopping, travel, rent, utilities, phone, subscriptions, software, car costs, car loans and car insurance, pets and vet bills, gyms, personal care, entertainment, online courses and kids' classes or sports, tax-preparation software and services, government fees such as DMV, permits, and parking tickets, purchases from charity-run stores, bank fees, and interest charged on credit cards."
 }

@@ -55,7 +55,9 @@ type payee struct {
 	SourceCategory string `json:"source_category"`
 	Label          string `json:"label"`
 	Origin         string `json:"origin"`
-	Hard           bool   `json:"hard"`
+	// Hard marks a clearly named payee whose category turns on an exclusion
+	// the criteria spell out: a pet hospital, tax software, a kids' class.
+	Hard bool `json:"hard"`
 }
 
 type amount struct {
@@ -209,12 +211,7 @@ func run(args []string) error {
 	if *protocol == "choice" {
 		questions["tax_category"] = map[string]any{"type": "choice", "instructions": question, "criteria": json.RawMessage(criteriaJSON)}
 	} else {
-		// No dataset row is labeled none_of_these, so noul asks only the real
-		// categories; a "none of the others" noul would be a different question.
 		for _, l := range labels {
-			if l == "none_of_these" {
-				continue
-			}
 			questions[l] = map[string]any{"type": "noul", "instructions": "This bank transaction belongs in this US personal income tax category: " + crit[l]}
 		}
 	}

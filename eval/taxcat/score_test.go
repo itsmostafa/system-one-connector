@@ -59,20 +59,20 @@ func TestApprox(t *testing.T) {
 }
 
 func TestLabelsInCriteriaOrder(t *testing.T) {
-	if len(labels) != 11 || labels[0] != "wage_income" || labels[10] != "none_of_these" {
+	if len(labels) != 10 || labels[0] != "wage_income" || labels[9] != "personal" {
 		t.Errorf("labels = %v", labels)
 	}
 }
 
 func TestAverage(t *testing.T) {
 	a := average("jev", []report{
-		{Acc: 0.9, Abstained: 2, Recall: map[string]float64{"medical": 1}, Coverage: []coverage{{0.5, 0.8, 1}},
+		{Acc: 0.9, Recall: map[string]float64{"medical": 1}, Coverage: []coverage{{0.5, 0.8, 1}},
 			Confusions: []confusion{{"medical", "personal", 2}}, Missed: []missed{{"CVS", "medical", "personal", 0.4}}},
-		{Acc: 0.8, Abstained: 4, Recall: map[string]float64{"medical": 0.5}, Coverage: []coverage{{0.5, 0.6, 0.5}},
+		{Acc: 0.8, Recall: map[string]float64{"medical": 0.5}, Coverage: []coverage{{0.5, 0.6, 0.5}},
 			Missed: []missed{{"CVS", "medical", "personal", 0.7}}},
 	})
-	if a.Passes != 2 || math.Abs(a.Acc-0.85) > 1e-9 || a.AccMin != 0.8 || a.AccMax != 0.9 || a.Abstained != 3 {
-		t.Errorf("average = passes %d acc %v [%v, %v] abstained %v", a.Passes, a.Acc, a.AccMin, a.AccMax, a.Abstained)
+	if a.Passes != 2 || math.Abs(a.Acc-0.85) > 1e-9 || a.AccMin != 0.8 || a.AccMax != 0.9 {
+		t.Errorf("average = passes %d acc %v [%v, %v]", a.Passes, a.Acc, a.AccMin, a.AccMax)
 	}
 	if math.Abs(a.Recall["medical"]-0.75) > 1e-9 || math.Abs(a.Coverage[0].Coverage-0.7) > 1e-9 || a.Confusions[0].N != 1 {
 		t.Errorf("average recall %v coverage %+v confusions %+v", a.Recall, a.Coverage, a.Confusions)

@@ -24,7 +24,7 @@ var thresholds = []float64{0.3, 0.5, 0.7}
 type report struct {
 	Name                  string
 	N, Passes             int
-	Errors, Abstained     float64
+	Errors                float64
 	Acc, AccReal, AccAdd  float64
 	AccHard, MacroF1, ECE float64
 	AccMin, AccMax        float64
@@ -155,7 +155,6 @@ func average(name string, ps []report) report {
 	for i, p := range ps {
 		metas[i] = p.Meta
 		a.Errors += p.Errors / n
-		a.Abstained += p.Abstained / n
 		a.Acc += p.Acc / n
 		a.AccReal += p.AccReal / n
 		a.AccAdd += p.AccAdd / n
@@ -226,9 +225,6 @@ func scoreRun(name string, rows []payee, ans []answer) report {
 		}
 		hit := pred == row.Label
 		r.Support[row.Label]++
-		if pred == "none_of_these" {
-			r.Abstained++
-		}
 		if hit {
 			right++
 			tp[row.Label]++
@@ -313,7 +309,7 @@ func scoreRun(name string, rows []payee, ans []answer) report {
 		var kept, keptRight int
 		for _, row := range rows {
 			a, ok := got[row.Row]
-			if !ok || a.Confidence < t || a.Choice == "none_of_these" {
+			if !ok || a.Confidence < t {
 				continue
 			}
 			kept++
@@ -348,15 +344,15 @@ func writeMarkdown(w io.Writer, reps []report) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Each figure is the mean over the run's passes; counts are per pass.")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "| Run | Model | Passes | Accuracy | Range | Macro-F1 | Deductible recall | Real payees | Added payees | Hard rows | ECE | Abstained | Errors |")
-	fmt.Fprintln(w, "|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	fmt.Fprintln(w, "| Run | Model | Passes | Accuracy | Range | Macro-F1 | Deductible recall | Real payees | Added payees | Boundary rows | ECE | Errors |")
+	fmt.Fprintln(w, "|---|---|---|---|---|---|---|---|---|---|---|---|")
 	for _, r := range reps {
 		model := ""
 		if len(r.Meta.Calls) > 0 {
 			model = r.Meta.Calls[0].Model
 		}
-		fmt.Fprintf(w, "| `%s` | `%s` | %d | %s | %s–%s | %.3f | %s | %s | %s | %s | %.3f | %.1f | %.1f |\n",
-			r.Name, model, r.Passes, pct(r.Acc), pct(r.AccMin), pct(r.AccMax), r.MacroF1, pct(r.DeductibleRecall), pct(r.AccReal), pct(r.AccAdd), pct(r.AccHard), r.ECE, r.Abstained, r.Errors)
+		fmt.Fprintf(w, "| `%s` | `%s` | %d | %s | %s–%s | %.3f | %s | %s | %s | %s | %.3f | %.1f |\n",
+			r.Name, model, r.Passes, pct(r.Acc), pct(r.AccMin), pct(r.AccMax), r.MacroF1, pct(r.DeductibleRecall), pct(r.AccReal), pct(r.AccAdd), pct(r.AccHard), r.ECE, r.Errors)
 	}
 
 	fmt.Fprintln(w, "\n## Recall by category")
