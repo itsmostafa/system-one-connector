@@ -60,6 +60,22 @@ tasks:
     requires:
       vars: [PROFILE]
 
+  eval:all:
+    desc: Run the tax-categorization eval for every profile in PROFILES, PASSES times each as <profile>.p1, .p2, ... (PASSES=3, LIMIT=5 for a smoke run); a failed pass is reported at the end without stopping the rest
+    deps: [build]
+    dir: eval
+    vars:
+      PROFILES: '{{.PROFILES | default "jev-1.14 d1 d1.1-liquid d1-ultra pplx-decider-flash-v1.2 pplx-decider-flash-v1.2-mac pplx-decider-v1.2 solar-decide clef clef-flash kev-4b gpt-6-luna-decisions"}}'
+    cmds:
+      - |
+        failed=""
+        for p in {{.PROFILES}}; do
+          for i in $(seq 1 {{.PASSES | default 3}}); do
+            go run ./taxcat run -profile "$p" -limit {{.LIMIT | default 0}} -name "$p.p$i" || failed="$failed $p.p$i"
+          done
+        done
+        if [ -n "$failed" ]; then echo "failed passes:$failed" >&2; exit 1; fi
+
   eval:score:
     desc: Score every saved eval run as Markdown
     dir: eval
