@@ -130,6 +130,8 @@ func TestRoute(t *testing.T) {
 		{"t", "", "http://localhost:8080", "http://localhost:8080/v1/systemone", "jev-latest", "t"},
 		// A base ending in /decisions off OpenRouter still gets /v1/systemone.
 		{"t", "", "https://api.liquid.ai/decisions", "https://api.liquid.ai/decisions/v1/systemone", "jev-latest", "t"},
+		// A base already ending in /v1/decisions is kept as given.
+		{"t", "", "http://127.0.0.1:11435/v1/decisions", "http://127.0.0.1:11435/v1/decisions", "jev-latest", "t"},
 		// OpenRouter's Decisions URL is kept as given; its bare host gets the path.
 		{"t", "", "https://openrouter.ai/api/alpha/decisions", "https://openrouter.ai/api/alpha/decisions", "jev-latest", "t"},
 		{"t", "", "https://openrouter.ai/", "https://openrouter.ai/api/alpha/decisions", "jev-latest", "t"},

@@ -61,7 +61,7 @@ TYPESAFE_API_KEY=your-key TYPESAFE_BASE_URL=https://jev.internal evaluate setup 
 - The default is `https://api.typesafe.ai`.
 - Set only the host: `evaluate` appends `/v1/systemone`. A trailing slash is fine.
 - The value must be an absolute `http` or `https` URL. `evaluate setup` rejects anything else rather than writing a broken endpoint into your client configs.
-- It has no effect on the OpenRouter route. A base on `openrouter.ai` is the exception to the appended path: it is used as given, so a profile can point at OpenRouter's Decisions endpoint.
+- It has no effect on the OpenRouter route. A base on `openrouter.ai` is the exception to the appended path: it is used as given, so a profile can point at OpenRouter's Decisions endpoint. So is any base whose path already ends in `/v1/decisions`, such as a local pplx-decider at `http://127.0.0.1:11435/v1/decisions`.
 - It also works with a local server that implements `POST /v1/systemone`, such as one serving Laya. `TYPESAFE_API_KEY` must still be set, since it is what selects this route. Use whatever key your server expects; if it doesn't check keys, any non-empty value such as `local` works.
 
 ### Running CLM locally
