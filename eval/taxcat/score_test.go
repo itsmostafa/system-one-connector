@@ -2,6 +2,8 @@ package main
 
 import (
 	"math"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -103,5 +105,57 @@ func TestCostPer100(t *testing.T) {
 	passes := []runMeta{{Calls: calls}, {Price: p, Calls: calls}, {Price: p2, Calls: calls}}
 	if got, ok := costPer100(passes); !ok || math.Abs(got-0.015) > 1e-12 {
 		t.Errorf("costPer100 over passes = %v, %v; want 0.015, true", got, ok)
+	}
+}
+
+func TestGroupKey(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		limit int
+		want  string
+	}{
+		{"jev.p1", 0, "jev"},
+		{"jev.p2", 1000, "jev"},
+		{"jev.p3", 10, "jev (first 10)"},
+		{"jev-noul", 0, "jev-noul"},
+	} {
+		if got := groupKey(c.name, runMeta{Limit: c.limit}, 1000); got != c.want {
+			t.Errorf("groupKey(%q, limit %d) = %q, want %q", c.name, c.limit, got, c.want)
+		}
+	}
+}
+
+func TestFingerprint(t *testing.T) {
+	dir := t.TempDir()
+	put := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fp := func(withAmount bool) string {
+		t.Helper()
+		s, err := fingerprint(dir, withAmount)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	put("payees.jsonl", `{"row": 1, "payee": "IRS", "label": "federal_tax"}`+"\n")
+	put("amounts.jsonl", `{"row": 1, "amount_rounded": -500}`+"\n")
+	names, both := fp(false), fp(true)
+	if names == both {
+		t.Error("sending amounts did not change the fingerprint")
+	}
+	put("amounts.jsonl", `{"row": 1, "amount_rounded": -600}`+"\n")
+	if fp(false) != names {
+		t.Error("an amount changed the fingerprint of a run that sent none")
+	}
+	if fp(true) == both {
+		t.Error("an amount change kept the fingerprint")
+	}
+	put("payees.jsonl", `{"row": 1, "payee": "IRS", "label": "state_local_tax"}`+"\n")
+	if fp(false) == names {
+		t.Error("a relabeled row kept the fingerprint")
 	}
 }

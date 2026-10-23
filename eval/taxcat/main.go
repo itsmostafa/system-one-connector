@@ -9,7 +9,9 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -184,6 +186,10 @@ func run(args []string) error {
 	if *limit > 0 && *limit < len(rows) {
 		rows = rows[:*limit]
 	}
+	dataset, err := fingerprint(*data, !*noAmount)
+	if err != nil {
+		return err
+	}
 
 	ctx := context.Background()
 	cmd := exec.Command(*bin, "mcp", "--no-update-check")
@@ -291,8 +297,29 @@ func run(args []string) error {
 		}
 		fmt.Fprintf(os.Stderr, "%s: rows %d-%d done, %d errors so far\n", *name, batch[0].Row, batch[len(batch)-1].Row, len(errs))
 	}
-	meta, _ := json.MarshalIndent(map[string]any{"profile": *profile, "protocol": *protocol, "with_amount": !*noAmount, "limit": *limit, "calls": metas, "errors": errs, "price": cost}, "", "  ")
+	meta, _ := json.MarshalIndent(map[string]any{"profile": *profile, "protocol": *protocol, "with_amount": !*noAmount, "dataset": dataset, "limit": *limit, "calls": metas, "errors": errs, "price": cost}, "", "  ")
 	return os.WriteFile(filepath.Join(*outDir, *name+".meta.json"), append(meta, '\n'), 0o644)
+}
+
+// fingerprint hashes what a run was asked and graded on: the criteria, the
+// question, the rows and, when sent, the amounts. score skips a pass whose
+// fingerprint differs, since its row numbers may now name other payees.
+func fingerprint(dir string, withAmount bool) (string, error) {
+	h := sha256.New()
+	h.Write(criteriaJSON)
+	h.Write([]byte(question))
+	files := []string{"payees.jsonl"}
+	if withAmount {
+		files = append(files, "amounts.jsonl")
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(filepath.Join(dir, f))
+		if err != nil {
+			return "", err
+		}
+		h.Write(b)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // argmax turns per-category noul answers into a normalized distribution, the
