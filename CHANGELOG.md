@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.13](https://github.com/itsmostafa/system-one-connector/compare/v0.4.12...v0.4.13) (2026-10-23)
+
+
+### Bug Fixes
+
+* **client:** keep /v1/decisions base URLs as given ([39dcd64](https://github.com/itsmostafa/system-one-connector/commit/39dcd64a8b8a7e31a4ba53a7351fb5ef8821b368))
+* **client:** keep /v1/decisions base URLs as given ([702423f](https://github.com/itsmostafa/system-one-connector/commit/702423f1c6111301c05c65c4d2ade05dbd5d95de))
+* **eval:** keep code-search scores to one commit and one question set ([b45fac7](https://github.com/itsmostafa/system-one-connector/commit/b45fac711089133cfad8f04ea42b12715a623979))
+
 ## [0.4.12](https://github.com/itsmostafa/system-one-connector/compare/v0.4.11...v0.4.12) (2026-10-08)
 
 
