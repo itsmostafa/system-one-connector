@@ -110,7 +110,8 @@ func selectedProfile() (*profile, string, error) {
 // bare host as a relative URL, so the scheme and host carry the check.
 // OpenRouter serves the same body at its own path, not /v1/systemone, so a base
 // on its host is kept as given (a bare host gets the Decisions path); only the
-// host can tell it apart, since Liquid's base also ends in /decisions.
+// host can tell it apart, since Liquid's base also ends in /decisions. A base
+// that already ends in /v1/decisions is kept too.
 func systemOneURL(base string) (string, error) {
 	u, err := url.Parse(base)
 	if err != nil {
@@ -123,6 +124,9 @@ func systemOneURL(base string) (string, error) {
 		if strings.Trim(u.Path, "/") == "" {
 			return openRouterURL, nil
 		}
+		return u.String(), nil
+	}
+	if strings.HasSuffix(strings.TrimRight(u.Path, "/"), "/v1/decisions") {
 		return u.String(), nil
 	}
 	return u.JoinPath("v1", "systemone").String(), nil
@@ -159,7 +163,7 @@ func newProfileCmd() *cobra.Command {
 		},
 	}
 	add.Flags().StringVar(&pr.Model, "model", "jev-latest", "default model for this profile")
-	add.Flags().StringVar(&pr.BaseURL, "base-url", "https://api.typesafe.ai", "host serving /v1/systemone, or OpenRouter's Decisions URL")
+	add.Flags().StringVar(&pr.BaseURL, "base-url", "https://api.typesafe.ai", "host serving /v1/systemone, or a full /v1/decisions or OpenRouter Decisions URL")
 	add.Flags().StringVar(&pr.APIKey, "api-key", "", "API key (default $TYPESAFE_API_KEY)")
 
 	cmd.AddCommand(
