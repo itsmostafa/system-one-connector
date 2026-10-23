@@ -65,7 +65,7 @@ tasks:
     deps: [build]
     dir: eval
     vars:
-      PROFILES: '{{.PROFILES | default "jev-1.14 d1 d1.1-liquid d1-ultra pplx-decider-flash-v1.2 pplx-decider-flash-v1.2-mac pplx-decider-v1.2 solar-decide clef clef-flash kev-4b gpt-6-luna-decisions"}}'
+      PROFILES: '{{.PROFILES | default "jev-1.14 d1 d1.1-liquid d1-ultra pplx-decider-flash-v1.2 pplx-decider-flash-v1.2-mac pplx-decider-v1.2 solar-decide clef clef-flash kev-4b gpt-6-luna-decisions mercury-decide"}}'
     cmds:
       - |
         failed=""
