@@ -6,3 +6,5 @@
 eval/data/
 eval/results/
 eval/codenav/repos/
+.gooze-reports
+.gooze.log*
