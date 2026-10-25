@@ -7,7 +7,7 @@
 
 <img src="assets/img/system-one-logo.gif" alt="System One Connector logo" width="75%">
 
-**Give your AI agent direct access to models like Jev, CLM, Laya, and d1: quick decisions with real probabilities.**
+**Give your AI agent direct access to models like TypeSafe Jev, Liquid AI d1, Cloudflare Clef, Respan Span-01, GPT-6 Luna Decisions, and Perplexity Decider Flash: quick decisions with real probabilities.**
 
 `evaluate` connects Claude Code, Claude Desktop, Codex, Hermes and [pi](https://pi.dev) to [TypeSafe](https://typesafe.ai)'s Jev model. Your agent asks a question like "is this urgent?" or "which team owns this?" and gets back a number or an option it can use in an `if` statement.
 
