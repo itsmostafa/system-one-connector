@@ -2,6 +2,9 @@ package main
 
 import (
 	"math"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -57,20 +60,20 @@ func TestApprox(t *testing.T) {
 }
 
 func TestLabelsInCriteriaOrder(t *testing.T) {
-	if len(labels) != 11 || labels[0] != "wage_income" || labels[10] != "none_of_these" {
+	if len(labels) != 10 || labels[0] != "wage_income" || labels[9] != "personal" {
 		t.Errorf("labels = %v", labels)
 	}
 }
 
 func TestAverage(t *testing.T) {
 	a := average("jev", []report{
-		{Acc: 0.9, Abstained: 2, Recall: map[string]float64{"medical": 1}, Coverage: []coverage{{0.5, 0.8, 1}},
+		{Acc: 0.9, Recall: map[string]float64{"medical": 1}, Coverage: []coverage{{0.5, 0.8, 1}},
 			Confusions: []confusion{{"medical", "personal", 2}}, Missed: []missed{{"CVS", "medical", "personal", 0.4}}},
-		{Acc: 0.8, Abstained: 4, Recall: map[string]float64{"medical": 0.5}, Coverage: []coverage{{0.5, 0.6, 0.5}},
+		{Acc: 0.8, Recall: map[string]float64{"medical": 0.5}, Coverage: []coverage{{0.5, 0.6, 0.5}},
 			Missed: []missed{{"CVS", "medical", "personal", 0.7}}},
 	})
-	if a.Passes != 2 || math.Abs(a.Acc-0.85) > 1e-9 || a.AccMin != 0.8 || a.AccMax != 0.9 || a.Abstained != 3 {
-		t.Errorf("average = passes %d acc %v [%v, %v] abstained %v", a.Passes, a.Acc, a.AccMin, a.AccMax, a.Abstained)
+	if a.Passes != 2 || math.Abs(a.Acc-0.85) > 1e-9 || a.AccMin != 0.8 || a.AccMax != 0.9 {
+		t.Errorf("average = passes %d acc %v [%v, %v]", a.Passes, a.Acc, a.AccMin, a.AccMax)
 	}
 	if math.Abs(a.Recall["medical"]-0.75) > 1e-9 || math.Abs(a.Coverage[0].Coverage-0.7) > 1e-9 || a.Confusions[0].N != 1 {
 		t.Errorf("average recall %v coverage %+v confusions %+v", a.Recall, a.Coverage, a.Confusions)
@@ -103,5 +106,74 @@ func TestCostPer100(t *testing.T) {
 	passes := []runMeta{{Calls: calls}, {Price: p, Calls: calls}, {Price: p2, Calls: calls}}
 	if got, ok := costPer100(passes); !ok || math.Abs(got-0.015) > 1e-12 {
 		t.Errorf("costPer100 over passes = %v, %v; want 0.015, true", got, ok)
+	}
+}
+
+func TestGroupKey(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		limit int
+		want  string
+	}{
+		{"jev.p1", 0, "jev"},
+		{"jev.p2", 1000, "jev"},
+		{"jev.p3", 10, "jev (first 10)"},
+		{"jev-noul", 0, "jev-noul"},
+	} {
+		if got := groupKey(c.name, runMeta{Limit: c.limit}, 1000); got != c.want {
+			t.Errorf("groupKey(%q, limit %d) = %q, want %q", c.name, c.limit, got, c.want)
+		}
+	}
+}
+
+func TestFingerprint(t *testing.T) {
+	dir := t.TempDir()
+	put := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fp := func(withAmount bool) string {
+		t.Helper()
+		s, err := fingerprint(dir, withAmount)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	put("payees.jsonl", `{"row": 1, "payee": "IRS", "label": "federal_tax"}`+"\n")
+	put("amounts.jsonl", `{"row": 1, "amount_rounded": -500}`+"\n")
+	names, both := fp(false), fp(true)
+	if names == both {
+		t.Error("sending amounts did not change the fingerprint")
+	}
+	put("amounts.jsonl", `{"row": 1, "amount_rounded": -600}`+"\n")
+	if fp(false) != names {
+		t.Error("an amount changed the fingerprint of a run that sent none")
+	}
+	if fp(true) == both {
+		t.Error("an amount change kept the fingerprint")
+	}
+	put("payees.jsonl", `{"row": 1, "payee": "IRS", "label": "state_local_tax"}`+"\n")
+	if fp(false) == names {
+		t.Error("a relabeled row kept the fingerprint")
+	}
+}
+
+func TestRecallTableAcrossLimitGroups(t *testing.T) {
+	full := report{Name: "jev", Support: map[string]int{"medical": 60, "personal": 400}, Recall: map[string]float64{"medical": 0.9, "personal": 1}}
+	smoke := report{Name: "jev (first 5)", Support: map[string]int{"personal": 3, "federal_tax": 2}, Recall: map[string]float64{"personal": 1, "federal_tax": 0.5}}
+	var b strings.Builder
+	writeMarkdown(&b, []report{smoke, full})
+	out := b.String()
+	for _, want := range []string{
+		"| `medical` | 60 | — | 90.0% |",
+		"| `federal_tax` | 2 | 50.0% | — |",
+		"| `personal` | 400 | 100.0% (3) | 100.0% |",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("recall table lacks %q:\n%s", want, out)
+		}
 	}
 }

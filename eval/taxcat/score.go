@@ -24,7 +24,7 @@ var thresholds = []float64{0.3, 0.5, 0.7}
 type report struct {
 	Name                  string
 	N, Passes             int
-	Errors, Abstained     float64
+	Errors                float64
 	Acc, AccReal, AccAdd  float64
 	AccHard, MacroF1, ECE float64
 	AccMin, AccMax        float64
@@ -57,6 +57,7 @@ type runMeta struct {
 	Profile    string            `json:"profile"`
 	Protocol   string            `json:"protocol"`
 	WithAmount bool              `json:"with_amount"`
+	Dataset    string            `json:"dataset"`
 	Limit      int               `json:"limit"`
 	Calls      []callMeta        `json:"calls"`
 	Errors     map[string]string `json:"errors"`
@@ -84,15 +85,27 @@ func score(args []string) error {
 	files, _ := filepath.Glob(filepath.Join(*dir, "*.jsonl"))
 	var order []string
 	groups := map[string][]report{}
+	want := map[bool]string{}
 	for _, f := range files {
-		ans, err := readJSONL[answer](f)
-		if err != nil {
-			return err
-		}
 		name := strings.TrimSuffix(filepath.Base(f), ".jsonl")
 		var meta runMeta
 		if b, err := os.ReadFile(strings.TrimSuffix(f, ".jsonl") + ".meta.json"); err == nil {
 			json.Unmarshal(b, &meta)
+		}
+		fp, ok := want[meta.WithAmount]
+		if !ok {
+			if fp, err = fingerprint(*data, meta.WithAmount); err != nil {
+				return err
+			}
+			want[meta.WithAmount] = fp
+		}
+		if meta.Dataset != fp {
+			fmt.Fprintf(os.Stderr, "taxcat: skipping %s: run on dataset %.7s, current dataset is %.7s\n", name, cmp.Or(meta.Dataset, "(none)"), fp)
+			continue
+		}
+		ans, err := readJSONL[answer](f)
+		if err != nil {
+			return err
 		}
 		// Score a -limit run on the rows it was given, not the whole dataset.
 		scored := rows
@@ -102,11 +115,11 @@ func score(args []string) error {
 		r := scoreRun(name, scored, ans)
 		r.Meta = meta
 		r.Errors = float64(len(r.Meta.Errors))
-		base := passSuffix.ReplaceAllString(name, "")
-		if groups[base] == nil {
-			order = append(order, base)
+		key := groupKey(name, meta, len(rows))
+		if groups[key] == nil {
+			order = append(order, key)
 		}
-		groups[base] = append(groups[base], r)
+		groups[key] = append(groups[key], r)
 	}
 	var reps []report
 	for _, base := range order {
@@ -118,6 +131,16 @@ func score(args []string) error {
 
 // passSuffix marks repeat passes of one run: jev.p1, jev.p2 and jev.p3 score as jev.
 var passSuffix = regexp.MustCompile(`\.p\d+$`)
+
+// groupKey folds repeat passes of one run together. A -limit run gets its own
+// group, so a smoke run never averages with full passes of the same name.
+func groupKey(name string, meta runMeta, rows int) string {
+	key := passSuffix.ReplaceAllString(name, "")
+	if meta.Limit > 0 && meta.Limit < rows {
+		key += fmt.Sprintf(" (first %d)", meta.Limit)
+	}
+	return key
+}
 
 // average folds repeat passes of one run into a single report: rates, recalls,
 // coverage and counts become per-pass means, confusions too, and the misses
@@ -132,7 +155,6 @@ func average(name string, ps []report) report {
 	for i, p := range ps {
 		metas[i] = p.Meta
 		a.Errors += p.Errors / n
-		a.Abstained += p.Abstained / n
 		a.Acc += p.Acc / n
 		a.AccReal += p.AccReal / n
 		a.AccAdd += p.AccAdd / n
@@ -203,9 +225,6 @@ func scoreRun(name string, rows []payee, ans []answer) report {
 		}
 		hit := pred == row.Label
 		r.Support[row.Label]++
-		if pred == "none_of_these" {
-			r.Abstained++
-		}
 		if hit {
 			right++
 			tp[row.Label]++
@@ -290,7 +309,7 @@ func scoreRun(name string, rows []payee, ans []answer) report {
 		var kept, keptRight int
 		for _, row := range rows {
 			a, ok := got[row.Row]
-			if !ok || a.Confidence < t || a.Choice == "none_of_these" {
+			if !ok || a.Confidence < t {
 				continue
 			}
 			kept++
@@ -325,15 +344,15 @@ func writeMarkdown(w io.Writer, reps []report) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Each figure is the mean over the run's passes; counts are per pass.")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "| Run | Model | Passes | Accuracy | Range | Macro-F1 | Deductible recall | Real payees | Added payees | Hard rows | ECE | Abstained | Errors |")
-	fmt.Fprintln(w, "|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	fmt.Fprintln(w, "| Run | Model | Passes | Accuracy | Range | Macro-F1 | Deductible recall | Real payees | Added payees | Boundary rows | ECE | Errors |")
+	fmt.Fprintln(w, "|---|---|---|---|---|---|---|---|---|---|---|---|")
 	for _, r := range reps {
 		model := ""
 		if len(r.Meta.Calls) > 0 {
 			model = r.Meta.Calls[0].Model
 		}
-		fmt.Fprintf(w, "| `%s` | `%s` | %d | %s | %s–%s | %.3f | %s | %s | %s | %s | %.3f | %.1f | %.1f |\n",
-			r.Name, model, r.Passes, pct(r.Acc), pct(r.AccMin), pct(r.AccMax), r.MacroF1, pct(r.DeductibleRecall), pct(r.AccReal), pct(r.AccAdd), pct(r.AccHard), r.ECE, r.Abstained, r.Errors)
+		fmt.Fprintf(w, "| `%s` | `%s` | %d | %s | %s–%s | %.3f | %s | %s | %s | %s | %.3f | %.1f |\n",
+			r.Name, model, r.Passes, pct(r.Acc), pct(r.AccMin), pct(r.AccMax), r.MacroF1, pct(r.DeductibleRecall), pct(r.AccReal), pct(r.AccAdd), pct(r.AccHard), r.ECE, r.Errors)
 	}
 
 	fmt.Fprintln(w, "\n## Recall by category")
@@ -347,17 +366,28 @@ func writeMarkdown(w io.Writer, reps []report) {
 		fmt.Fprint(w, "---|")
 	}
 	fmt.Fprintln(w)
-	if len(reps) > 0 {
-		for _, l := range labels {
-			if reps[0].Support[l] == 0 {
-				continue
-			}
-			fmt.Fprintf(w, "| `%s` | %d |", l, reps[0].Support[l])
-			for _, r := range reps {
-				fmt.Fprintf(w, " %s |", pct(r.Recall[l]))
-			}
-			fmt.Fprintln(w)
+	// Groups limited to fewer rows have smaller supports, so Rows is the
+	// largest support and a cell names its own count when that differs.
+	for _, l := range labels {
+		rows := 0
+		for _, r := range reps {
+			rows = max(rows, r.Support[l])
 		}
+		if rows == 0 {
+			continue
+		}
+		fmt.Fprintf(w, "| `%s` | %d |", l, rows)
+		for _, r := range reps {
+			switch n := r.Support[l]; n {
+			case 0:
+				fmt.Fprint(w, " — |")
+			case rows:
+				fmt.Fprintf(w, " %s |", pct(r.Recall[l]))
+			default:
+				fmt.Fprintf(w, " %s (%d) |", pct(r.Recall[l]), n)
+			}
+		}
+		fmt.Fprintln(w)
 	}
 
 	fmt.Fprintln(w, "\n## Coverage when abstaining below a confidence threshold")
