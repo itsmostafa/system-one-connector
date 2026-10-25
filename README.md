@@ -7,7 +7,7 @@
 
 <img src="assets/img/system-one-logo.gif" alt="System One Connector logo" width="75%">
 
-**Give your AI agent direct access to models like Jev, CLM, Laya, and d1: quick decisions with real probabilities.**
+**Give your AI agent direct access to models like TypeSafe Jev, Liquid AI d1, Cloudflare Clef, Respan Span-01, GPT-6 Luna Decisions, and Perplexity Decider Flash: quick decisions with real probabilities.**
 
 `evaluate` connects Claude Code, Claude Desktop, Codex, Hermes and [pi](https://pi.dev) to [TypeSafe](https://typesafe.ai)'s Jev model. Your agent asks a question like "is this urgent?" or "which team owns this?" and gets back a number or an option it can use in an `if` statement.
 
@@ -92,6 +92,9 @@ Any model behind the System One API works. These have setup instructions:
 | d1 | [Liquid AI](https://liquid.ai) | Liquid AI's hosted endpoint ([running d1](docs/configuration.md#d1-liquid-ai)) | |
 | Kev 4B | Jared Palmer | OpenRouter [profile](docs/configuration.md#profiles) | |
 | Span-01 | [Respan](https://www.respan.ai) | OpenRouter [profile](docs/configuration.md#span-01-respan) | `noul` questions only; state must be text or a conversation |
+| Clef | [Cloudflare](https://www.cloudflare.com) | OpenRouter [profile](docs/configuration.md#profiles) | |
+| GPT-6 Luna Decisions | [OpenAI](https://openai.com) | OpenRouter [profile](docs/configuration.md#profiles) | Refuses a `choice` where no option fits; offer a no-match option |
+| Decider Flash | [Perplexity](https://www.perplexity.ai) | OpenRouter [profile](docs/configuration.md#profiles) | |
 | CLM | [Contrastive-LM](https://huggingface.co/Contrastive-LM/CLM-v0.1-8B) | Self-hosted ([running CLM](docs/configuration.md#running-clm-locally)) | |
 | Laya | Open model | Self-hosted ([custom hosts](docs/configuration.md#custom-typesafe-host)) | |
 

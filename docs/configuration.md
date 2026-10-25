@@ -96,6 +96,9 @@ evaluate profile add liquid --model d1:free --base-url https://api.liquid.ai/dec
 evaluate profile add clm --model clm-latest --base-url http://127.0.0.1:8700 --api-key local
 evaluate profile add kev-4b --model kev-4b --base-url https://openrouter.ai/api/alpha/decisions --api-key your-openrouter-key
 evaluate profile add span-01 --model span-01 --base-url https://openrouter.ai/api/alpha/decisions --api-key your-openrouter-key
+evaluate profile add clef --model cloudflare/clef --base-url https://openrouter.ai/api/alpha/decisions --api-key your-openrouter-key
+evaluate profile add gpt-6-luna-decisions --model openai/gpt-6-luna-decisions --base-url https://openrouter.ai/api/alpha/decisions --api-key your-openrouter-key
+evaluate profile add pplx-decider-flash --model perplexity/pplx-decider-flash-v1.2 --base-url https://openrouter.ai/api/alpha/decisions --api-key your-openrouter-key
 evaluate profile use liquid
 evaluate profile list
 ```
