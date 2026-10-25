@@ -366,17 +366,28 @@ func writeMarkdown(w io.Writer, reps []report) {
 		fmt.Fprint(w, "---|")
 	}
 	fmt.Fprintln(w)
-	if len(reps) > 0 {
-		for _, l := range labels {
-			if reps[0].Support[l] == 0 {
-				continue
-			}
-			fmt.Fprintf(w, "| `%s` | %d |", l, reps[0].Support[l])
-			for _, r := range reps {
-				fmt.Fprintf(w, " %s |", pct(r.Recall[l]))
-			}
-			fmt.Fprintln(w)
+	// Groups limited to fewer rows have smaller supports, so Rows is the
+	// largest support and a cell names its own count when that differs.
+	for _, l := range labels {
+		rows := 0
+		for _, r := range reps {
+			rows = max(rows, r.Support[l])
 		}
+		if rows == 0 {
+			continue
+		}
+		fmt.Fprintf(w, "| `%s` | %d |", l, rows)
+		for _, r := range reps {
+			switch n := r.Support[l]; n {
+			case 0:
+				fmt.Fprint(w, " — |")
+			case rows:
+				fmt.Fprintf(w, " %s |", pct(r.Recall[l]))
+			default:
+				fmt.Fprintf(w, " %s (%d) |", pct(r.Recall[l]), n)
+			}
+		}
+		fmt.Fprintln(w)
 	}
 
 	fmt.Fprintln(w, "\n## Coverage when abstaining below a confidence threshold")

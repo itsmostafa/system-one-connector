@@ -4,6 +4,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -157,5 +158,22 @@ func TestFingerprint(t *testing.T) {
 	put("payees.jsonl", `{"row": 1, "payee": "IRS", "label": "state_local_tax"}`+"\n")
 	if fp(false) == names {
 		t.Error("a relabeled row kept the fingerprint")
+	}
+}
+
+func TestRecallTableAcrossLimitGroups(t *testing.T) {
+	full := report{Name: "jev", Support: map[string]int{"medical": 60, "personal": 400}, Recall: map[string]float64{"medical": 0.9, "personal": 1}}
+	smoke := report{Name: "jev (first 5)", Support: map[string]int{"personal": 3, "federal_tax": 2}, Recall: map[string]float64{"personal": 1, "federal_tax": 0.5}}
+	var b strings.Builder
+	writeMarkdown(&b, []report{smoke, full})
+	out := b.String()
+	for _, want := range []string{
+		"| `medical` | 60 | — | 90.0% |",
+		"| `federal_tax` | 2 | 50.0% | — |",
+		"| `personal` | 400 | 100.0% (3) | 100.0% |",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("recall table lacks %q:\n%s", want, out)
+		}
 	}
 }
