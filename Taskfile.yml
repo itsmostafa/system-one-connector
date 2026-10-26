@@ -105,6 +105,28 @@ tasks:
     cmds:
       - go run ./codenav score -suite {{.SUITE | default "transformers"}} -baseline {{.BASELINE | default "d1"}}
 
+  eval:soctriage:build:
+    desc: Download SecAlertBench at its pinned commit and build the English SOC triage set (SIZE=4000)
+    dir: eval
+    cmds:
+      - go run ./soctriage fetch
+      - go run ./soctriage build -size {{.SIZE | default 4000}}
+
+  eval:soctriage:
+    desc: Run the SOC triage eval for one profile (PROFILE=jev, PROTOCOL=choice|noul, LIMIT=10 for a smoke run, NAME=jev.p1 to name a pass)
+    deps: [build]
+    dir: eval
+    cmds:
+      - go run ./soctriage run -profile {{.PROFILE}} -protocol {{.PROTOCOL | default "choice"}} -limit {{.LIMIT | default 0}}{{if .NAME}} -name {{.NAME}}{{end}}
+    requires:
+      vars: [PROFILE]
+
+  eval:soctriage:score:
+    desc: Score every saved SOC triage run as Markdown, beside the rule-name baseline
+    dir: eval
+    cmds:
+      - go run ./soctriage score
+
   tidy:
     desc: Tidy go.mod
     cmds:

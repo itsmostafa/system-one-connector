@@ -1,0 +1,4 @@
+{
+  "escalate": "The traffic is an attempt to attack the target: an exploit or injection payload, path traversal, a malicious file upload, credential guessing, or probing for sensitive files, admin pages, or known vulnerabilities. This holds whether or not the attempt succeeded.",
+  "false_positive": "The rule matched traffic that is not an attack: ordinary application requests, normal user input or uploads, legitimate clients and agents, or the server's own error pages and responses. Nothing in the request is aimed at exploiting or probing the target."
+}
