@@ -22,22 +22,31 @@ var thresholds = []float64{0.3, 0.5, 0.7}
 const baselineName = "baseline: rule name"
 
 // report holds one run's scores, or the mean over several passes of a run.
-// Recall, FalseAlarms and Precision are about the escalate class: recall is
-// the share of attacks escalated, false alarms the share of false positives
-// escalated, and precision the share of escalations that were attacks.
+// AttacksEscalated, FPClosed and FPEscalated are shares of each labeled
+// class; precision is the share of escalations that were attacks.
 type report struct {
-	Name                 string
-	N, Passes            int
-	Errors               float64
-	Recall, FalseAlarms  float64
-	Precision, F1        float64
-	Acc, MacroF1, ECE    float64
-	RecallMin, RecallMax float64
-	Coverage             []coverage
-	Missed               []missed
-	Meta                 runMeta
-	Cost100              float64 // USD per 100 alerts, each pass at its own saved rate
-	Costed               bool    // false when no pass saved a rate
+	Name                  string
+	N, Passes             int
+	Errors                float64
+	AttacksEscalated      float64
+	FPClosed, FPEscalated float64
+	Precision, F1         float64
+	Acc, MacroF1, ECE     float64
+	AUC                   float64 // how well p(escalate) ranks attacks above false positives, whatever the cutoff
+	RecallMin, RecallMax  float64 // spread of AttacksEscalated across passes
+	// Counts are per-pass means of the 2x2 of labels against answers.
+	// Alerts that errored upstream are in no cell; Errors counts them.
+	Counts   counts
+	Coverage []coverage
+	Missed   []missed
+	Meta     runMeta
+	Cost100  float64 // USD per 100 alerts, each pass at its own saved rate
+	Costed   bool    // false when no pass saved a rate
+}
+
+type counts struct {
+	AttacksEscalated, AttacksClosed float64
+	FPEscalated, FPClosed           float64
 }
 
 type coverage struct {
@@ -205,10 +214,12 @@ func scoreRun(name string, rows []alert, ans []answer) report {
 		}
 	}
 	r.Acc = ratio(right, len(rows))
-	r.Recall = ratio(tp[escalate], support[escalate])
+	r.AttacksEscalated = ratio(tp[escalate], support[escalate])
+	r.FPClosed = ratio(tp[falsePositive], support[falsePositive])
+	r.FPEscalated = ratio(fp[escalate], support[falsePositive])
 	r.Precision = ratio(tp[escalate], tp[escalate]+fp[escalate])
-	r.FalseAlarms = ratio(fp[escalate], support[falsePositive])
-	r.RecallMin, r.RecallMax = r.Recall, r.Recall
+	r.RecallMin, r.RecallMax = r.AttacksEscalated, r.AttacksEscalated
+	r.Counts = counts{float64(tp[escalate]), float64(fp[falsePositive]), float64(fp[escalate]), float64(tp[falsePositive])}
 	var f1s []float64
 	for _, l := range labels {
 		if support[l] == 0 {
@@ -221,6 +232,7 @@ func scoreRun(name string, rows []alert, ans []answer) report {
 		}
 	}
 	r.MacroF1 = mean(f1s)
+	r.AUC = auc(rows, got)
 	slices.SortFunc(r.Missed, func(a, b missed) int { return cmp.Compare(b.Conf, a.Conf) })
 
 	// ECE over ten equal-width bins of the chosen option's probability.
@@ -264,21 +276,27 @@ func scoreRun(name string, rows []alert, ans []answer) report {
 // prediction once at its highest confidence.
 func average(name string, ps []report) report {
 	n := float64(len(ps))
-	a := report{Name: name, N: ps[0].N, Passes: len(ps), Meta: ps[0].Meta, RecallMin: ps[0].Recall, RecallMax: ps[0].Recall}
+	a := report{Name: name, N: ps[0].N, Passes: len(ps), Meta: ps[0].Meta, RecallMin: ps[0].AttacksEscalated, RecallMax: ps[0].AttacksEscalated}
 	a.Meta.Calls = nil
 	seen := map[[2]string]int{}
 	metas := make([]runMeta, len(ps))
 	for i, p := range ps {
 		metas[i] = p.Meta
 		a.Errors += p.Errors / n
-		a.Recall += p.Recall / n
-		a.FalseAlarms += p.FalseAlarms / n
+		a.AttacksEscalated += p.AttacksEscalated / n
+		a.FPClosed += p.FPClosed / n
+		a.FPEscalated += p.FPEscalated / n
+		a.Counts.AttacksEscalated += p.Counts.AttacksEscalated / n
+		a.Counts.AttacksClosed += p.Counts.AttacksClosed / n
+		a.Counts.FPEscalated += p.Counts.FPEscalated / n
+		a.Counts.FPClosed += p.Counts.FPClosed / n
 		a.Precision += p.Precision / n
 		a.F1 += p.F1 / n
 		a.Acc += p.Acc / n
 		a.MacroF1 += p.MacroF1 / n
 		a.ECE += p.ECE / n
-		a.RecallMin, a.RecallMax = min(a.RecallMin, p.Recall), max(a.RecallMax, p.Recall)
+		a.AUC += p.AUC / n
+		a.RecallMin, a.RecallMax = min(a.RecallMin, p.AttacksEscalated), max(a.RecallMax, p.AttacksEscalated)
 		for j, c := range p.Coverage {
 			if i == 0 {
 				a.Coverage = append(a.Coverage, coverage{Threshold: c.Threshold})
@@ -323,6 +341,38 @@ func costPer100(passes []runMeta) (float64, bool) {
 	return usd * 100 / float64(items), true
 }
 
+// auc is the area under the ROC curve of p(escalate): the chance that a
+// random attack scores above a random false positive, ties counting half.
+// Rows with no answer are left out.
+func auc(rows []alert, got map[int]answer) float64 {
+	var pos, neg []float64
+	for _, row := range rows {
+		a, ok := got[row.Row]
+		if !ok {
+			continue
+		}
+		if row.Label == escalate {
+			pos = append(pos, a.Probabilities[escalate])
+		} else {
+			neg = append(neg, a.Probabilities[escalate])
+		}
+	}
+	if len(pos) == 0 || len(neg) == 0 {
+		return 0
+	}
+	slices.Sort(neg)
+	var wins float64
+	for _, p := range pos {
+		below, _ := slices.BinarySearch(neg, p)
+		end := below
+		for end < len(neg) && neg[end] == p {
+			end++
+		}
+		wins += float64(below) + float64(end-below)/2
+	}
+	return wins / float64(len(pos)*len(neg))
+}
+
 func f1(p, r float64) float64 {
 	if p+r == 0 {
 		return 0
@@ -345,22 +395,40 @@ func mean(xs []float64) float64 {
 	return s / float64(max(len(xs), 1))
 }
 
+// num prints a per-pass count, with a decimal only when passes disagree.
+func num(x float64) string {
+	if x == math.Trunc(x) {
+		return fmt.Sprintf("%.0f", x)
+	}
+	return fmt.Sprintf("%.1f", x)
+}
+
 func pct(x float64) string { return fmt.Sprintf("%.1f%%", 100*x) }
 
 func writeMarkdown(w io.Writer, reps []report) {
 	fmt.Fprintln(w, "## Headline")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Attacks caught is recall on `escalate`; false alarms is the share of `false_positive` alerts escalated. Each figure is the mean over the run's passes. The rule-name baseline guesses each alert's label from the other alerts under the same rule.")
+	fmt.Fprintln(w, "Attacks escalated is the share of real attacks the model escalated (higher is better). False positives closed is the share of harmless alerts it correctly closed (higher is better), and false positives escalated is the rest, which an analyst would have to look at for nothing (lower is better). Precision is the share of escalations that were real attacks. AUC is the chance an attack gets a higher escalate probability than a false positive, so it shows how well a model reads the alerts whatever cutoff it answers at. Each figure is the mean over the run's passes. The rule-name baseline guesses each alert's label from the other alerts under the same rule.")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "| Run | Model | Passes | Alerts | Attacks caught | Range | False alarms | Precision | Escalate F1 | Accuracy | Macro-F1 | ECE | Errors |")
-	fmt.Fprintln(w, "|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	fmt.Fprintln(w, "| Run | Model | Passes | Alerts | Attacks escalated | Attacks escalated, range across passes | False positives closed | False positives escalated | Precision | Escalate F1 | Accuracy | Macro-F1 | AUC | ECE | Errors |")
+	fmt.Fprintln(w, "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 	for _, r := range reps {
 		model := ""
 		if len(r.Meta.Calls) > 0 {
 			model = "`" + r.Meta.Calls[0].Model + "`"
 		}
-		fmt.Fprintf(w, "| `%s` | %s | %d | %d | %s | %s–%s | %s | %s | %.3f | %s | %.3f | %.3f | %.1f |\n",
-			r.Name, model, r.Passes, r.N, pct(r.Recall), pct(r.RecallMin), pct(r.RecallMax), pct(r.FalseAlarms), pct(r.Precision), r.F1, pct(r.Acc), r.MacroF1, r.ECE, r.Errors)
+		fmt.Fprintf(w, "| `%s` | %s | %d | %d | %s | %s–%s | %s | %s | %s | %.3f | %s | %.3f | %.3f | %.3f | %.1f |\n",
+			r.Name, model, r.Passes, r.N, pct(r.AttacksEscalated), pct(r.RecallMin), pct(r.RecallMax), pct(r.FPClosed), pct(r.FPEscalated), pct(r.Precision), r.F1, pct(r.Acc), r.MacroF1, r.AUC, r.ECE, r.Errors)
+	}
+
+	fmt.Fprintln(w, "\n## Answers against labels")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Alert counts per pass. Alerts that errored upstream are left out.")
+	for _, r := range reps {
+		c := r.Counts
+		fmt.Fprintf(w, "\n`%s`\n\n| Labeled | Model said escalate | Model said false positive |\n|---|---|---|\n", r.Name)
+		fmt.Fprintf(w, "| Attack | %s attacks escalated | %s attacks closed (missed) |\n", num(c.AttacksEscalated), num(c.AttacksClosed))
+		fmt.Fprintf(w, "| False positive | %s false positives escalated | %s false positives closed |\n", num(c.FPEscalated), num(c.FPClosed))
 	}
 
 	fmt.Fprintln(w, "\n## Coverage when abstaining below a confidence threshold")

@@ -24,7 +24,7 @@ var labels = []string{escalate, falsePositive}
 
 const (
 	question     = "Should a SOC analyst escalate this web security alert, or close it as a false positive? `item.rule_name`, `item.attack_type` and `item.kill_chain_all` are what the detection rule reported; the other fields are the HTTP request and response that triggered it."
-	noulQuestion = "This web security alert is a real attack attempt that a SOC analyst should escalate, not a false positive on harmless traffic. An attack attempt includes exploit or injection payloads, path traversal, malicious uploads, credential guessing, and probing for sensitive files or known vulnerabilities, whether or not it succeeded. `item.rule_name`, `item.attack_type` and `item.kill_chain_all` are what the detection rule reported; the other fields are the HTTP request and response that triggered it."
+	noulQuestion = "This web security alert is a real attack attempt that a SOC analyst should escalate, not a false positive on harmless traffic. An attack attempt includes exploit or injection payloads, path traversal, malicious uploads, automated or default-credential login attempts, and requests for files and paths a normal client has no reason to reach, whether or not it succeeded. A user logging in to their own account with a mistyped or empty password, or a client downloading files that are part of its normal work, is not an attack attempt. `item.rule_name`, `item.attack_type` and `item.kill_chain_all` are what the detection rule reported; the other fields are the HTTP request and response that triggered it."
 )
 
 // apiAnswer is one question's answer as evaluate returns it.
