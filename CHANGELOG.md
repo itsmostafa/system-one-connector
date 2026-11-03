@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.14](https://github.com/itsmostafa/system-one-connector/compare/v0.4.13...v0.4.14) (2026-10-25)
+
+
+### Bug Fixes
+
+* **eval:** make the taxcat eval neutral and score it only on its own dataset ([12212ee](https://github.com/itsmostafa/system-one-connector/commit/12212eefc24a002f5adf34f461b14b8ba2877263))
+* **eval:** show recall per taxcat group when limits differ ([2b0f555](https://github.com/itsmostafa/system-one-connector/commit/2b0f555ececbed1bed2b2ada41586867010b78c2))
+
 ## [0.4.13](https://github.com/itsmostafa/system-one-connector/compare/v0.4.12...v0.4.13) (2026-10-23)
 
 
