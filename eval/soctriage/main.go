@@ -1,12 +1,13 @@
 // Command soctriage builds the SOC alert-triage eval set from SecAlertBench
 // (https://github.com/Dxsssu/SecAlertBench): production web alerts from three
 // enterprise SOCs, each labeled Attack or Non-Attack. Jev will decide whether
-// an alert should be escalated or closed as a false positive.
+// an alert is Risky, an attack to escalate, or a False Positive to close.
 //
 //	go run ./soctriage fetch
 //	go run ./soctriage build
 //	go run ./soctriage run -profile jev
 //	go run ./soctriage run -profile jev -protocol noul
+//	go run ./soctriage run -profile jev -protocol inconclusive
 //	go run ./soctriage score
 package main
 

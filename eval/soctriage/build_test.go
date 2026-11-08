@@ -39,8 +39,8 @@ func TestSelectAlerts(t *testing.T) {
 	if st.Unique != 10 || st.Conflicting != 1 || st.ForeignTraffic != 1 || st.Pool != 9 {
 		t.Errorf("stats = %+v, want unique 10, conflicting 1, foreign 1, pool 9", st)
 	}
-	if st.Labels[escalate] != 1 || st.Labels[falsePositive] != 3 {
-		t.Errorf("labels = %v, want 1 escalate, 3 false_positive", st.Labels)
+	if st.Labels[risky] != 1 || st.Labels[falsePositive] != 3 {
+		t.Errorf("labels = %v, want 1 risky, 3 false_positive", st.Labels)
 	}
 	// The fill takes one false positive per rule per round, so the two
 	// directory-traversal rows get in beside the six SQL-injection rows.
@@ -86,7 +86,7 @@ func TestSelectAlertsMissingTranslation(t *testing.T) {
 func TestSelectAlertsTooSmall(t *testing.T) {
 	raw := []alert{mk("命令执行", "/a", "Attack"), mk("目录穿越", "/b", "Attack")}
 	if _, _, err := selectAlerts(raw, testTr, 1); err == nil {
-		t.Error("want an error when escalate alerts exceed the set size")
+		t.Error("want an error when risky alerts exceed the set size")
 	}
 	if _, _, err := selectAlerts(raw, testTr, 3); err == nil {
 		t.Error("want an error when the pool is smaller than the set size")

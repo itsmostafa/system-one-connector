@@ -22,18 +22,20 @@ var thresholds = []float64{0.3, 0.5, 0.7}
 const baselineName = "baseline: rule name"
 
 // report holds one run's scores, or the mean over several passes of a run.
-// AttacksEscalated, FPClosed and FPEscalated are shares of each labeled
-// class; precision is the share of escalations that were attacks.
+// AttacksRisky is the share of attacks given a Risky verdict, FPRight the
+// share of false positives given a False Positive verdict, and FPRisky the
+// share given Risky. Precision is the share of Risky verdicts that were attacks.
 type report struct {
-	Name                  string
-	N, Passes             int
-	Errors                float64
-	AttacksEscalated      float64
-	FPClosed, FPEscalated float64
-	Precision, F1         float64
-	Acc, MacroF1, ECE     float64
-	AUC                   float64 // how well p(escalate) ranks attacks above false positives, whatever the cutoff
-	RecallMin, RecallMax  float64 // spread of AttacksEscalated across passes
+	Name                 string
+	N, Passes            int
+	Errors               float64
+	AttacksRisky         float64
+	FPRight, FPRisky     float64
+	Precision, F1        float64
+	Acc, MacroF1, ECE    float64
+	Inconclusive         float64 // share of alerts given an Inconclusive verdict; they count as wrong in Acc
+	AUC                  float64 // how well p(Risky) ranks attacks above false positives, whatever the cutoff
+	RecallMin, RecallMax float64 // spread of AttacksRisky across passes
 	// Counts are per-pass means of the 2x2 of labels against answers.
 	// Alerts that errored upstream are in no cell; Errors counts them.
 	Counts   counts
@@ -45,8 +47,8 @@ type report struct {
 }
 
 type counts struct {
-	AttacksEscalated, AttacksClosed float64
-	FPEscalated, FPClosed           float64
+	AttacksRisky, AttacksFP, AttacksInc float64
+	FPRisky, FPRight, FPInc             float64
 }
 
 type coverage struct {
@@ -88,9 +90,11 @@ func score(args []string) error {
 	if err != nil {
 		return err
 	}
-	fp, err := fingerprint(*data)
-	if err != nil {
-		return err
+	fps := map[string]string{}
+	for _, p := range []string{"choice", "inconclusive"} {
+		if fps[p], err = fingerprint(*data, p); err != nil {
+			return err
+		}
 	}
 	reps := []report{scoreRun(baselineName, rows, ruleBaseline(rows))}
 	files, _ := filepath.Glob(filepath.Join(*dir, "*.jsonl"))
@@ -101,6 +105,10 @@ func score(args []string) error {
 		var meta runMeta
 		if b, err := os.ReadFile(strings.TrimSuffix(f, ".jsonl") + ".meta.json"); err == nil {
 			json.Unmarshal(b, &meta)
+		}
+		fp := fps["choice"] // noul runs share the two-way fingerprint
+		if meta.Protocol == "inconclusive" {
+			fp = fps["inconclusive"]
 		}
 		if meta.Dataset != fp {
 			fmt.Fprintf(os.Stderr, "soctriage: skipping %s: run on dataset %.7s, current dataset is %.7s\n", name, cmp.Or(meta.Dataset, "(none)"), fp)
@@ -159,8 +167,8 @@ func ruleBaseline(rows []alert) []answer {
 	}
 	out := make([]answer, len(rows))
 	for i, r := range rows {
-		esc, fp := count[r.RuleName][escalate], count[r.RuleName][falsePositive]
-		if r.Label == escalate {
+		esc, fp := count[r.RuleName][risky], count[r.RuleName][falsePositive]
+		if r.Label == risky {
 			esc--
 		} else {
 			fp--
@@ -171,9 +179,9 @@ func ruleBaseline(rows []alert) []answer {
 		}
 		choice := falsePositive
 		if p > 0.5 {
-			choice = escalate
+			choice = risky
 		}
-		out[i] = answer{Row: r.Row, Choice: choice, Confidence: math.Abs(2*p - 1), Probabilities: map[string]float64{escalate: p, falsePositive: 1 - p}}
+		out[i] = answer{Row: r.Row, Verdict: choice, Confidence: math.Abs(2*p - 1), Probabilities: map[string]float64{risky: p, falsePositive: 1 - p}}
 	}
 	return out
 }
@@ -186,7 +194,7 @@ func scoreRun(name string, rows []alert, ans []answer) report {
 		got[a.Row] = a
 	}
 	r := report{Name: name, N: len(rows), Passes: 1}
-	tp, fp := map[string]int{}, map[string]int{}
+	tp, fp, inc := map[string]int{}, map[string]int{}, map[string]int{}
 	support := map[string]int{}
 	var right int
 	type pt struct {
@@ -196,16 +204,20 @@ func scoreRun(name string, rows []alert, ans []answer) report {
 	var pts []pt
 	for _, row := range rows {
 		a, ok := got[row.Row]
-		pred := a.Choice
+		pred := a.Verdict
 		if !ok {
 			pred = "(error)"
 		}
 		hit := pred == row.Label
 		support[row.Label]++
-		if hit {
+		switch {
+		case hit:
 			right++
 			tp[row.Label]++
-		} else {
+		case pred == inconclusive:
+			// Not wrong, just undecided: counted apart and kept off the misses list.
+			inc[row.Label]++
+		default:
 			fp[pred]++
 			r.Missed = append(r.Missed, missed{row.Row, row.RuleName, deref(row.URI), row.Label, pred, a.Confidence})
 		}
@@ -214,12 +226,13 @@ func scoreRun(name string, rows []alert, ans []answer) report {
 		}
 	}
 	r.Acc = ratio(right, len(rows))
-	r.AttacksEscalated = ratio(tp[escalate], support[escalate])
-	r.FPClosed = ratio(tp[falsePositive], support[falsePositive])
-	r.FPEscalated = ratio(fp[escalate], support[falsePositive])
-	r.Precision = ratio(tp[escalate], tp[escalate]+fp[escalate])
-	r.RecallMin, r.RecallMax = r.AttacksEscalated, r.AttacksEscalated
-	r.Counts = counts{float64(tp[escalate]), float64(fp[falsePositive]), float64(fp[escalate]), float64(tp[falsePositive])}
+	r.AttacksRisky = ratio(tp[risky], support[risky])
+	r.FPRight = ratio(tp[falsePositive], support[falsePositive])
+	r.FPRisky = ratio(fp[risky], support[falsePositive])
+	r.Precision = ratio(tp[risky], tp[risky]+fp[risky])
+	r.RecallMin, r.RecallMax = r.AttacksRisky, r.AttacksRisky
+	r.Inconclusive = ratio(inc[risky]+inc[falsePositive], len(rows))
+	r.Counts = counts{float64(tp[risky]), float64(fp[falsePositive]), float64(inc[risky]), float64(fp[risky]), float64(tp[falsePositive]), float64(inc[falsePositive])}
 	var f1s []float64
 	for _, l := range labels {
 		if support[l] == 0 {
@@ -227,7 +240,7 @@ func scoreRun(name string, rows []alert, ans []answer) report {
 		}
 		f := f1(ratio(tp[l], tp[l]+fp[l]), ratio(tp[l], support[l]))
 		f1s = append(f1s, f)
-		if l == escalate {
+		if l == risky {
 			r.F1 = f
 		}
 	}
@@ -262,7 +275,7 @@ func scoreRun(name string, rows []alert, ans []answer) report {
 				continue
 			}
 			kept++
-			if a.Choice == row.Label {
+			if a.Verdict == row.Label {
 				keptRight++
 			}
 		}
@@ -276,27 +289,30 @@ func scoreRun(name string, rows []alert, ans []answer) report {
 // prediction once at its highest confidence.
 func average(name string, ps []report) report {
 	n := float64(len(ps))
-	a := report{Name: name, N: ps[0].N, Passes: len(ps), Meta: ps[0].Meta, RecallMin: ps[0].AttacksEscalated, RecallMax: ps[0].AttacksEscalated}
+	a := report{Name: name, N: ps[0].N, Passes: len(ps), Meta: ps[0].Meta, RecallMin: ps[0].AttacksRisky, RecallMax: ps[0].AttacksRisky}
 	a.Meta.Calls = nil
 	seen := map[[2]string]int{}
 	metas := make([]runMeta, len(ps))
 	for i, p := range ps {
 		metas[i] = p.Meta
 		a.Errors += p.Errors / n
-		a.AttacksEscalated += p.AttacksEscalated / n
-		a.FPClosed += p.FPClosed / n
-		a.FPEscalated += p.FPEscalated / n
-		a.Counts.AttacksEscalated += p.Counts.AttacksEscalated / n
-		a.Counts.AttacksClosed += p.Counts.AttacksClosed / n
-		a.Counts.FPEscalated += p.Counts.FPEscalated / n
-		a.Counts.FPClosed += p.Counts.FPClosed / n
+		a.AttacksRisky += p.AttacksRisky / n
+		a.FPRight += p.FPRight / n
+		a.FPRisky += p.FPRisky / n
+		a.Counts.AttacksRisky += p.Counts.AttacksRisky / n
+		a.Counts.AttacksFP += p.Counts.AttacksFP / n
+		a.Counts.AttacksInc += p.Counts.AttacksInc / n
+		a.Counts.FPRisky += p.Counts.FPRisky / n
+		a.Counts.FPRight += p.Counts.FPRight / n
+		a.Counts.FPInc += p.Counts.FPInc / n
+		a.Inconclusive += p.Inconclusive / n
 		a.Precision += p.Precision / n
 		a.F1 += p.F1 / n
 		a.Acc += p.Acc / n
 		a.MacroF1 += p.MacroF1 / n
 		a.ECE += p.ECE / n
 		a.AUC += p.AUC / n
-		a.RecallMin, a.RecallMax = min(a.RecallMin, p.AttacksEscalated), max(a.RecallMax, p.AttacksEscalated)
+		a.RecallMin, a.RecallMax = min(a.RecallMin, p.AttacksRisky), max(a.RecallMax, p.AttacksRisky)
 		for j, c := range p.Coverage {
 			if i == 0 {
 				a.Coverage = append(a.Coverage, coverage{Threshold: c.Threshold})
@@ -341,7 +357,7 @@ func costPer100(passes []runMeta) (float64, bool) {
 	return usd * 100 / float64(items), true
 }
 
-// auc is the area under the ROC curve of p(escalate): the chance that a
+// auc is the area under the ROC curve of p(Risky): the chance that a
 // random attack scores above a random false positive, ties counting half.
 // Rows with no answer are left out.
 func auc(rows []alert, got map[int]answer) float64 {
@@ -351,10 +367,10 @@ func auc(rows []alert, got map[int]answer) float64 {
 		if !ok {
 			continue
 		}
-		if row.Label == escalate {
-			pos = append(pos, a.Probabilities[escalate])
+		if row.Label == risky {
+			pos = append(pos, a.Probabilities[risky])
 		} else {
-			neg = append(neg, a.Probabilities[escalate])
+			neg = append(neg, a.Probabilities[risky])
 		}
 	}
 	if len(pos) == 0 || len(neg) == 0 {
@@ -403,22 +419,35 @@ func num(x float64) string {
 	return fmt.Sprintf("%.1f", x)
 }
 
+// verdictName is how a label or verdict reads in the report.
+func verdictName(l string) string {
+	switch l {
+	case risky:
+		return "Risky"
+	case falsePositive:
+		return "False Positive"
+	case inconclusive:
+		return "Inconclusive"
+	}
+	return l
+}
+
 func pct(x float64) string { return fmt.Sprintf("%.1f%%", 100*x) }
 
 func writeMarkdown(w io.Writer, reps []report) {
 	fmt.Fprintln(w, "## Headline")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Attacks escalated is the share of real attacks the model escalated (higher is better). False positives closed is the share of harmless alerts it correctly closed (higher is better), and false positives escalated is the rest, which an analyst would have to look at for nothing (lower is better). Precision is the share of escalations that were real attacks. AUC is the chance an attack gets a higher escalate probability than a false positive, so it shows how well a model reads the alerts whatever cutoff it answers at. Each figure is the mean over the run's passes. The rule-name baseline guesses each alert's label from the other alerts under the same rule.")
+	fmt.Fprintln(w, "Each alert gets a Verdict: Risky (a real attack to escalate) or False Positive (harmless, close it). Attacks rated Risky is the share of real attacks the model caught (higher is better). False positives rated False Positive is the share of harmless alerts it correctly closed (higher is better), and false positives rated Risky is the rest, which an analyst would look at for nothing (lower is better). Precision is the share of Risky verdicts that were real attacks. AUC is the chance an attack gets a higher Risky probability than a false positive, so it shows how well a model reads the alerts whatever cutoff it answers at. Each figure is the mean over the run's passes. The rule-name baseline guesses each alert's label from the other alerts under the same rule. Runs ending in -inconclusive could also answer Inconclusive, which counts as wrong in accuracy and shows in the Inconclusive column.")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "| Run | Model | Passes | Alerts | Attacks escalated | Attacks escalated, range across passes | False positives closed | False positives escalated | Precision | Escalate F1 | Accuracy | Macro-F1 | AUC | ECE | Errors |")
-	fmt.Fprintln(w, "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	fmt.Fprintln(w, "| Run | Model | Passes | Alerts | Attacks rated Risky | Range across passes | False positives rated False Positive | False positives rated Risky | Inconclusive | Precision | Risky F1 | Accuracy | Macro-F1 | AUC | ECE | Errors |")
+	fmt.Fprintln(w, "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 	for _, r := range reps {
 		model := ""
 		if len(r.Meta.Calls) > 0 {
 			model = "`" + r.Meta.Calls[0].Model + "`"
 		}
-		fmt.Fprintf(w, "| `%s` | %s | %d | %d | %s | %s–%s | %s | %s | %s | %.3f | %s | %.3f | %.3f | %.3f | %.1f |\n",
-			r.Name, model, r.Passes, r.N, pct(r.AttacksEscalated), pct(r.RecallMin), pct(r.RecallMax), pct(r.FPClosed), pct(r.FPEscalated), pct(r.Precision), r.F1, pct(r.Acc), r.MacroF1, r.AUC, r.ECE, r.Errors)
+		fmt.Fprintf(w, "| `%s` | %s | %d | %d | %s | %s–%s | %s | %s | %s | %s | %.3f | %s | %.3f | %.3f | %.3f | %.1f |\n",
+			r.Name, model, r.Passes, r.N, pct(r.AttacksRisky), pct(r.RecallMin), pct(r.RecallMax), pct(r.FPRight), pct(r.FPRisky), pct(r.Inconclusive), pct(r.Precision), r.F1, pct(r.Acc), r.MacroF1, r.AUC, r.ECE, r.Errors)
 	}
 
 	fmt.Fprintln(w, "\n## Answers against labels")
@@ -426,9 +455,15 @@ func writeMarkdown(w io.Writer, reps []report) {
 	fmt.Fprintln(w, "Alert counts per pass. Alerts that errored upstream are left out.")
 	for _, r := range reps {
 		c := r.Counts
-		fmt.Fprintf(w, "\n`%s`\n\n| Labeled | Model said escalate | Model said false positive |\n|---|---|---|\n", r.Name)
-		fmt.Fprintf(w, "| Attack | %s attacks escalated | %s attacks closed (missed) |\n", num(c.AttacksEscalated), num(c.AttacksClosed))
-		fmt.Fprintf(w, "| False positive | %s false positives escalated | %s false positives closed |\n", num(c.FPEscalated), num(c.FPClosed))
+		if r.Meta.Protocol == "inconclusive" {
+			fmt.Fprintf(w, "\n`%s`\n\n| Labeled | Verdict: Risky | Verdict: False Positive | Verdict: Inconclusive |\n|---|---|---|---|\n", r.Name)
+			fmt.Fprintf(w, "| Attack | %s caught | %s missed | %s undecided |\n", num(c.AttacksRisky), num(c.AttacksFP), num(c.AttacksInc))
+			fmt.Fprintf(w, "| False positive | %s wrongly escalated | %s correctly closed | %s undecided |\n", num(c.FPRisky), num(c.FPRight), num(c.FPInc))
+			continue
+		}
+		fmt.Fprintf(w, "\n`%s`\n\n| Labeled | Verdict: Risky | Verdict: False Positive |\n|---|---|---|\n", r.Name)
+		fmt.Fprintf(w, "| Attack | %s caught | %s missed |\n", num(c.AttacksRisky), num(c.AttacksFP))
+		fmt.Fprintf(w, "| False positive | %s wrongly escalated | %s correctly closed |\n", num(c.FPRisky), num(c.FPRight))
 	}
 
 	fmt.Fprintln(w, "\n## Coverage when abstaining below a confidence threshold")
@@ -470,9 +505,9 @@ func writeMarkdown(w io.Writer, reps []report) {
 		if r.Name == baselineName {
 			continue
 		}
-		fmt.Fprintf(w, "\n## `%s`: most confident misses\n\n| Row | Rule | URI | Labeled | Predicted | Confidence |\n|---|---|---|---|---|---|\n", r.Name)
+		fmt.Fprintf(w, "\n## `%s`: most confident misses\n\n| Row | Rule | URI | Labeled | Verdict | Confidence |\n|---|---|---|---|---|---|\n", r.Name)
 		for _, m := range r.Missed[:min(10, len(r.Missed))] {
-			fmt.Fprintf(w, "| %d | %s | `%s` | `%s` | `%s` | %.2f |\n", m.Row, m.Rule, cell(m.URI, 60), m.Want, m.Got, m.Conf)
+			fmt.Fprintf(w, "| %d | %s | `%s` | %s | %s | %.2f |\n", m.Row, m.Rule, cell(m.URI, 60), verdictName(m.Want), verdictName(m.Got), m.Conf)
 		}
 	}
 }

@@ -113,7 +113,7 @@ tasks:
       - go run ./soctriage build -size {{.SIZE | default 4000}}
 
   eval:soctriage:
-    desc: Run the SOC triage eval for one profile (PROFILE=jev, PROTOCOL=choice|noul, LIMIT=10 for a smoke run, NAME=jev.p1 to name a pass)
+    desc: Run the SOC triage eval for one profile (PROFILE=jev, PROTOCOL=choice|inconclusive|noul, LIMIT=10 for a smoke run, NAME=jev.p1 to name a pass)
     deps: [build]
     dir: eval
     cmds:

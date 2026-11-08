@@ -39,11 +39,14 @@ type alert struct {
 }
 
 const (
-	escalate      = "escalate"
+	risky         = "risky"
 	falsePositive = "false_positive"
+	// inconclusive is a verdict only the inconclusive protocol offers; no
+	// alert carries it as a label.
+	inconclusive = "inconclusive"
 )
 
-var labelMap = map[string]string{"Attack": escalate, "Non-Attack": falsePositive}
+var labelMap = map[string]string{"Attack": risky, "Non-Attack": falsePositive}
 
 // translations maps the detector's Chinese labels to English. Kill-chain
 // stages are translated by name, keeping each stage's hex code.
@@ -62,9 +65,9 @@ func (s stats) String() string {
 	return fmt.Sprintf(`raw alerts               %d
 after dedupe             %d (dropped %d keys with conflicting labels)
 non-English traffic      %d dropped
-English pool             %d (%d escalate, %d false_positive)
-eval set                 %d (%d escalate, %d false_positive)
-`, s.Raw, s.Unique, s.Conflicting, s.ForeignTraffic, s.Pool, s.PoolLabels[escalate], s.PoolLabels[falsePositive], s.Selected, s.Labels[escalate], s.Labels[falsePositive])
+English pool             %d (%d risky, %d false_positive)
+eval set                 %d (%d risky, %d false_positive)
+`, s.Raw, s.Unique, s.Conflicting, s.ForeignTraffic, s.Pool, s.PoolLabels[risky], s.PoolLabels[falsePositive], s.Selected, s.Labels[risky], s.Labels[falsePositive])
 }
 
 func (a alert) key() string {
@@ -79,7 +82,7 @@ func (a alert) key() string {
 //     since translating raw traffic would change the evidence.
 //  3. Translate the detector's labels to English; a string missing from the
 //     table is an error, never passed through.
-//  4. Keep every escalate alert and fill to size with false positives taken
+//  4. Keep every risky alert and fill to size with false positives taken
 //     one per rule name per round, so no single noisy rule dominates.
 func selectAlerts(raw []alert, tr translations, size int) ([]alert, stats, error) {
 	st := stats{Raw: len(raw), PoolLabels: map[string]int{}, Labels: map[string]int{}}
@@ -140,14 +143,14 @@ func selectAlerts(raw []alert, tr translations, size int) ([]alert, stats, error
 	var out []alert
 	byRule := map[string][]alert{}
 	for _, a := range pool {
-		if a.Label == escalate {
+		if a.Label == risky {
 			out = append(out, a)
 		} else {
 			byRule[a.RuleName] = append(byRule[a.RuleName], a)
 		}
 	}
 	if len(out) > size {
-		return nil, st, fmt.Errorf("%d escalate alerts do not fit in a set of %d", len(out), size)
+		return nil, st, fmt.Errorf("%d risky alerts do not fit in a set of %d", len(out), size)
 	}
 	if len(pool) < size {
 		return nil, st, fmt.Errorf("only %d English alerts, fewer than the %d asked for", len(pool), size)

@@ -20,11 +20,14 @@ import (
 )
 
 // labels lists the options in criteria order.
-var labels = []string{escalate, falsePositive}
+var labels = []string{risky, falsePositive}
 
 const (
-	question     = "Should a SOC analyst escalate this web security alert, or close it as a false positive? `item.rule_name`, `item.attack_type` and `item.kill_chain_all` are what the detection rule reported; the other fields are the HTTP request and response that triggered it."
-	noulQuestion = "This web security alert is a real attack attempt that a SOC analyst should escalate, not a false positive on harmless traffic. An attack attempt includes exploit or injection payloads, path traversal, malicious uploads, automated or default-credential login attempts, and requests for files and paths a normal client has no reason to reach, whether or not it succeeded. A user logging in to their own account with a mistyped or empty password, or a client downloading files that are part of its normal work, is not an attack attempt. `item.rule_name`, `item.attack_type` and `item.kill_chain_all` are what the detection rule reported; the other fields are the HTTP request and response that triggered it."
+	question = "What is the verdict on this web security alert: Risky, a real attack attempt a SOC analyst should look at, or False Positive, the rule firing on harmless traffic? `item.rule_name`, `item.attack_type` and `item.kill_chain_all` are what the detection rule reported; the other fields are the HTTP request and response that triggered it."
+	// The inconclusive protocol asks the same choice with a third option.
+	question3             = "What is the verdict on this web security alert: Risky, a real attack attempt a SOC analyst should look at; False Positive, the rule firing on harmless traffic; or Inconclusive, the alert alone cannot tell which? `item.rule_name`, `item.attack_type` and `item.kill_chain_all` are what the detection rule reported; the other fields are the HTTP request and response that triggered it."
+	inconclusiveCriterion = "The alert does not show whether the traffic is an attack or harmless: the request and response fit either reading, and telling them apart needs context the alert does not include."
+	noulQuestion          = "This web security alert is Risky: a real attack attempt that a SOC analyst should look at, not a false positive on harmless traffic. An attack attempt includes exploit or injection payloads, path traversal, malicious uploads, automated or default-credential login attempts, and requests for files and paths a normal client has no reason to reach, whether or not it succeeded. A user logging in to their own account with a mistyped or empty password, or a client downloading files that are part of its normal work, is not an attack attempt. `item.rule_name`, `item.attack_type` and `item.kill_chain_all` are what the detection rule reported; the other fields are the HTTP request and response that triggered it."
 )
 
 // apiAnswer is one question's answer as evaluate returns it.
@@ -38,7 +41,7 @@ type apiAnswer struct {
 // answer is one result row, written for both protocols so scoring is uniform.
 type answer struct {
 	Row           int                `json:"row"`
-	Choice        string             `json:"choice"`
+	Verdict       string             `json:"verdict"`
 	Confidence    float64            `json:"confidence"`
 	Probabilities map[string]float64 `json:"probabilities"`
 }
@@ -46,8 +49,8 @@ type answer struct {
 func run(args []string) error {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	profile := fs.String("profile", "", "evaluate profile to pin with TYPESAFE_PROFILE")
-	protocol := fs.String("protocol", "choice", "choice, or noul (one yes/no escalate question, escalate at 0.5 or above)")
-	name := fs.String("name", "", "results name (default: profile, plus -noul for the noul protocol)")
+	protocol := fs.String("protocol", "choice", "choice, inconclusive (choice with a third Inconclusive verdict), or noul (one yes/no Risky question, Risky at 0.5 or above)")
+	name := fs.String("name", "", "results name (default: profile, plus -noul or -inconclusive for those protocols)")
 	limit := fs.Int("limit", 0, "only the first N alerts (smoke runs)")
 	bin := fs.String("bin", "../evaluate", "evaluate binary")
 	data := fs.String("data", "data/soctriage", "dataset directory")
@@ -56,13 +59,13 @@ func run(args []string) error {
 	if *profile == "" {
 		return errors.New("-profile is required")
 	}
-	if *protocol != "choice" && *protocol != "noul" {
-		return fmt.Errorf("-protocol must be choice or noul, got %q", *protocol)
+	if !slices.Contains([]string{"choice", "inconclusive", "noul"}, *protocol) {
+		return fmt.Errorf("-protocol must be choice, inconclusive or noul, got %q", *protocol)
 	}
 	if *name == "" {
 		*name = *profile
-		if *protocol == "noul" {
-			*name += "-noul"
+		if *protocol != "choice" {
+			*name += "-" + *protocol
 		}
 	}
 
@@ -73,7 +76,7 @@ func run(args []string) error {
 	if *limit > 0 && *limit < len(rows) {
 		rows = rows[:*limit]
 	}
-	dataset, err := fingerprint(*data)
+	dataset, err := fingerprint(*data, *protocol)
 	if err != nil {
 		return err
 	}
@@ -89,10 +92,17 @@ func run(args []string) error {
 	defer cs.Close()
 
 	questions := map[string]any{}
-	if *protocol == "choice" {
-		questions["disposition"] = map[string]any{"type": "choice", "instructions": question, "criteria": json.RawMessage(criteriaJSON)}
-	} else {
-		questions["escalate"] = map[string]any{"type": "noul", "instructions": noulQuestion}
+	switch *protocol {
+	case "choice":
+		questions["verdict"] = map[string]any{"type": "choice", "instructions": question, "criteria": json.RawMessage(criteriaJSON)}
+	case "inconclusive":
+		criteria, err := criteria3()
+		if err != nil {
+			return err
+		}
+		questions["verdict"] = map[string]any{"type": "choice", "instructions": question3, "criteria": criteria}
+	default:
+		questions["risky"] = map[string]any{"type": "noul", "instructions": noulQuestion}
 	}
 
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
@@ -152,11 +162,11 @@ func run(args []string) error {
 			row, _ := strconv.Atoi(id)
 			a := answer{Row: row}
 			ans := reply.Results[id].Answers
-			if *protocol == "choice" {
-				q := ans["disposition"]
-				a.Choice, a.Confidence, a.Probabilities = q.Choice, q.Confidence, q.Probabilities
+			if *protocol != "noul" {
+				q := ans["verdict"]
+				a.Verdict, a.Confidence, a.Probabilities = q.Choice, q.Confidence, q.Probabilities
 			} else {
-				a.Choice, a.Confidence, a.Probabilities = fromNoul(ans["escalate"].Noul)
+				a.Verdict, a.Confidence, a.Probabilities = fromNoul(ans["risky"].Noul)
 			}
 			if err := enc.Encode(a); err != nil {
 				return err
@@ -177,22 +187,33 @@ func (a alert) state() alert {
 	return a
 }
 
-// fromNoul turns the escalate probability into the same shape a choice
+// fromNoul turns the Risky probability into the same shape a choice
 // answer has. With two options, the choice confidence formula reduces to
 // the gap between them.
 func fromNoul(p float64) (string, float64, map[string]float64) {
 	choice := falsePositive
 	if p >= 0.5 {
-		choice = escalate
+		choice = risky
 	}
-	probs := map[string]float64{escalate: p, falsePositive: 1 - p}
+	probs := map[string]float64{risky: p, falsePositive: 1 - p}
 	return choice, max(p, 1-p) - min(p, 1-p), probs
 }
 
+// criteria3 is criteria.json with the Inconclusive option added.
+func criteria3() (json.RawMessage, error) {
+	var c map[string]string
+	if err := json.Unmarshal(criteriaJSON, &c); err != nil {
+		return nil, err
+	}
+	c[inconclusive] = inconclusiveCriterion
+	return json.Marshal(c)
+}
+
 // fingerprint hashes what a run was asked and graded on: the criteria, both
-// questions and the alerts. score skips a pass whose fingerprint differs,
-// since its row numbers may now name other alerts.
-func fingerprint(dir string) (string, error) {
+// two-way questions and the alerts, plus the three-way question for the
+// inconclusive protocol. score skips a pass whose fingerprint differs, since
+// its row numbers may now name other alerts.
+func fingerprint(dir, protocol string) (string, error) {
 	b, err := os.ReadFile(filepath.Join(dir, alertsFile))
 	if err != nil {
 		return "", err
@@ -201,6 +222,10 @@ func fingerprint(dir string) (string, error) {
 	h.Write(criteriaJSON)
 	h.Write([]byte(question))
 	h.Write([]byte(noulQuestion))
+	if protocol == "inconclusive" {
+		h.Write([]byte(question3))
+		h.Write([]byte(inconclusiveCriterion))
+	}
 	h.Write(b)
 	return hex.EncodeToString(h.Sum(nil)), nil
 }

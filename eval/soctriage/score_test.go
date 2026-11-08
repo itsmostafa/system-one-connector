@@ -21,26 +21,26 @@ func row(n int, rule, label string) alert {
 
 func TestScoreRun(t *testing.T) {
 	rows := []alert{
-		row(1, "a", escalate),
-		row(2, "a", escalate),
+		row(1, "a", risky),
+		row(2, "a", risky),
 		row(3, "b", falsePositive),
 		row(4, "b", falsePositive),
 		row(5, "b", falsePositive),
 	}
 	ans := []answer{
-		{Row: 1, Choice: escalate, Confidence: 0.8, Probabilities: map[string]float64{escalate: 0.9}},
+		{Row: 1, Verdict: risky, Confidence: 0.8, Probabilities: map[string]float64{risky: 0.9}},
 		// row 2 failed upstream and has no answer
-		{Row: 3, Choice: escalate, Confidence: 0.6, Probabilities: map[string]float64{escalate: 0.8}},
-		{Row: 4, Choice: falsePositive, Confidence: 0.4, Probabilities: map[string]float64{falsePositive: 0.7}},
-		{Row: 5, Choice: falsePositive, Confidence: 0.2, Probabilities: map[string]float64{falsePositive: 0.6}},
+		{Row: 3, Verdict: risky, Confidence: 0.6, Probabilities: map[string]float64{risky: 0.8}},
+		{Row: 4, Verdict: falsePositive, Confidence: 0.4, Probabilities: map[string]float64{falsePositive: 0.7}},
+		{Row: 5, Verdict: falsePositive, Confidence: 0.2, Probabilities: map[string]float64{falsePositive: 0.6}},
 	}
 	r := scoreRun("t", rows, ans)
 	near(t, "Acc", r.Acc, 3.0/5)
-	near(t, "AttacksEscalated", r.AttacksEscalated, 0.5) // row 1 caught, row 2 errored
-	near(t, "FPEscalated", r.FPEscalated, 1.0/3)         // row 3 escalated
-	near(t, "FPClosed", r.FPClosed, 2.0/3)
+	near(t, "AttacksRisky", r.AttacksRisky, 0.5) // row 1 caught, row 2 errored
+	near(t, "FPRisky", r.FPRisky, 1.0/3)         // row 3 rated Risky
+	near(t, "FPRight", r.FPRight, 2.0/3)
 	// The errored attack is in no cell.
-	if want := (counts{AttacksEscalated: 1, FPEscalated: 1, FPClosed: 2}); r.Counts != want {
+	if want := (counts{AttacksRisky: 1, FPRisky: 1, FPRight: 2}); r.Counts != want {
 		t.Errorf("Counts = %+v, want %+v", r.Counts, want)
 	}
 	near(t, "Precision", r.Precision, 0.5)
@@ -57,10 +57,44 @@ func TestScoreRun(t *testing.T) {
 	}
 }
 
+func TestScoreRunInconclusive(t *testing.T) {
+	rows := []alert{row(1, "a", risky), row(2, "a", risky), row(3, "b", falsePositive), row(4, "b", falsePositive)}
+	ans := []answer{
+		{Row: 1, Verdict: risky, Probabilities: map[string]float64{risky: 0.9}},
+		{Row: 2, Verdict: inconclusive, Probabilities: map[string]float64{risky: 0.4, inconclusive: 0.5}},
+		{Row: 3, Verdict: inconclusive, Probabilities: map[string]float64{risky: 0.3, inconclusive: 0.6}},
+		{Row: 4, Verdict: falsePositive, Probabilities: map[string]float64{risky: 0.1}},
+	}
+	r := scoreRun("t", rows, ans)
+	near(t, "Acc", r.Acc, 2.0/4) // Inconclusive is not right
+	near(t, "Inconclusive", r.Inconclusive, 2.0/4)
+	near(t, "AttacksRisky", r.AttacksRisky, 0.5)
+	near(t, "FPRisky", r.FPRisky, 0) // undecided is not escalated
+	near(t, "Precision", r.Precision, 1)
+	if want := (counts{AttacksRisky: 1, AttacksInc: 1, FPRight: 1, FPInc: 1}); r.Counts != want {
+		t.Errorf("Counts = %+v, want %+v", r.Counts, want)
+	}
+	if len(r.Missed) != 0 {
+		t.Errorf("Missed = %+v, want none: Inconclusive is not a miss", r.Missed)
+	}
+}
+
+func TestCriteria3(t *testing.T) {
+	b, err := criteria3()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c map[string]string
+	json.Unmarshal(b, &c)
+	if len(c) != 3 || c[inconclusive] != inconclusiveCriterion || c[risky] == "" || c[falsePositive] == "" {
+		t.Errorf("criteria3 = %v, want risky, false_positive and inconclusive", c)
+	}
+}
+
 func TestAUC(t *testing.T) {
-	rows := []alert{row(1, "a", escalate), row(2, "a", escalate), row(3, "b", falsePositive), row(4, "b", falsePositive)}
+	rows := []alert{row(1, "a", risky), row(2, "a", risky), row(3, "b", falsePositive), row(4, "b", falsePositive)}
 	p := func(n int, v float64) answer {
-		return answer{Row: n, Probabilities: map[string]float64{escalate: v}}
+		return answer{Row: n, Probabilities: map[string]float64{risky: v}}
 	}
 	got := map[int]answer{1: p(1, 0.9), 2: p(2, 0.4), 3: p(3, 0.4), 4: p(4, 0.1)}
 	// Pairs: 0.9 beats both; 0.4 ties 0.4 (half) and beats 0.1. 3.5 of 4.
@@ -69,18 +103,18 @@ func TestAUC(t *testing.T) {
 
 func TestRuleBaseline(t *testing.T) {
 	rows := []alert{
-		row(1, "a", escalate),
-		row(2, "a", escalate),
+		row(1, "a", risky),
+		row(2, "a", risky),
 		row(3, "a", falsePositive),
-		row(4, "solo", escalate),
+		row(4, "solo", risky),
 	}
 	got := map[int]string{}
 	for _, a := range ruleBaseline(rows) {
-		got[a.Row] = a.Choice
+		got[a.Row] = a.Verdict
 	}
-	// Row 1 sees one escalate and one false positive: a tie, so false_positive.
-	// Row 3 sees two escalates. Row 4 has no other alert under its rule.
-	want := map[int]string{1: falsePositive, 2: falsePositive, 3: escalate, 4: falsePositive}
+	// Row 1 sees one risky and one false positive: a tie, so false_positive.
+	// Row 3 sees two risky. Row 4 has no other alert under its rule.
+	want := map[int]string{1: falsePositive, 2: falsePositive, 3: risky, 4: falsePositive}
 	for n, w := range want {
 		if got[n] != w {
 			t.Errorf("row %d = %s, want %s", n, got[n], w)
@@ -90,7 +124,7 @@ func TestRuleBaseline(t *testing.T) {
 
 func TestFromNoul(t *testing.T) {
 	c, conf, p := fromNoul(0.8)
-	if c != escalate || math.Abs(conf-0.6) > 1e-9 || math.Abs(p[falsePositive]-0.2) > 1e-9 {
+	if c != risky || math.Abs(conf-0.6) > 1e-9 || math.Abs(p[falsePositive]-0.2) > 1e-9 {
 		t.Errorf("fromNoul(0.8) = %s, %v, %v", c, conf, p)
 	}
 	if c, _, _ := fromNoul(0.3); c != falsePositive {
@@ -100,12 +134,12 @@ func TestFromNoul(t *testing.T) {
 
 func TestAverage(t *testing.T) {
 	a := average("jev", []report{
-		{AttacksEscalated: 0.6, FPEscalated: 0.2, Counts: counts{FPClosed: 3}, Missed: []missed{{Row: 1, Got: escalate, Conf: 0.4}}},
-		{AttacksEscalated: 0.8, FPEscalated: 0.4, Counts: counts{FPClosed: 4}, Missed: []missed{{Row: 1, Got: escalate, Conf: 0.7}, {Row: 2, Got: falsePositive, Conf: 0.1}}},
+		{AttacksRisky: 0.6, FPRisky: 0.2, Counts: counts{FPRight: 3}, Missed: []missed{{Row: 1, Got: risky, Conf: 0.4}}},
+		{AttacksRisky: 0.8, FPRisky: 0.4, Counts: counts{FPRight: 4}, Missed: []missed{{Row: 1, Got: risky, Conf: 0.7}, {Row: 2, Got: falsePositive, Conf: 0.1}}},
 	})
-	near(t, "AttacksEscalated", a.AttacksEscalated, 0.7)
-	near(t, "FPEscalated", a.FPEscalated, 0.3)
-	near(t, "Counts.FPClosed", a.Counts.FPClosed, 3.5)
+	near(t, "AttacksRisky", a.AttacksRisky, 0.7)
+	near(t, "FPRisky", a.FPRisky, 0.3)
+	near(t, "Counts.FPRight", a.Counts.FPRight, 3.5)
 	near(t, "RecallMin", a.RecallMin, 0.6)
 	near(t, "RecallMax", a.RecallMax, 0.8)
 	if a.Passes != 2 || len(a.Missed) != 2 || a.Missed[0].Conf != 0.7 {
@@ -130,7 +164,7 @@ func TestGroupKey(t *testing.T) {
 
 func TestStateHidesLabelAndRandomIPs(t *testing.T) {
 	uri := "/login"
-	a := alert{Row: 7, Label: escalate, RuleName: "r", URI: &uri, Sip: "1.2.3.4", Dip: "5.6.7.8", Sport: 4444, Dport: 80}
+	a := alert{Row: 7, Label: risky, RuleName: "r", URI: &uri, Sip: "1.2.3.4", Dip: "5.6.7.8", Sport: 4444, Dport: 80}
 	b, _ := json.Marshal(a.state())
 	s := string(b)
 	for _, leak := range []string{`"row"`, `"label"`, "1.2.3.4", "5.6.7.8", `"sport"`, `"xff"`} {
