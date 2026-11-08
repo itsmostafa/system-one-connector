@@ -13,19 +13,19 @@ Run `task eval:soctriage:build`. It writes `eval/data/soctriage/alerts.jsonl`:
 | Raw file (pinned commit, SHA-256 checked) | 8,322 |
 | After removing duplicates and 16 keys with opposite labels | 5,811 |
 | After dropping alerts whose traffic isn't English (Chinese pages, plus one Russian reply) | 4,076 |
-| **Eval set** | **4,000**: 1,282 escalate, 2,718 false_positive |
+| **Eval set** | **4,000**: 1,282 risky, 2,718 false_positive |
 
 - The detector's Chinese labels are translated through `translations.json`: 215 rule names, 22 alert types and 14 kill-chain stages, checked by hand. CVE IDs in every rule name were matched against the originals. A missing translation fails the build; nothing Chinese passes through.
-- Every escalate alert is kept. The 76 false positives cut to reach 4,000 come from the rules with the most rows.
+- Every risky alert is kept. The 76 false positives cut to reach 4,000 come from the rules with the most rows.
 - Binary attack payloads (TLS handshakes, serialized Java objects) stay in. They contain stray non-ASCII bytes, but they are evidence, not a foreign language.
 - SQL-injection false positives still make up nearly half the set (1,922 of the 2,718 false positives). That's what the source contains, and the rule-name baseline exists to expose it.
 
 ## 2. Ask the question
 
 - One question per alert, with two answers:
-  - **escalate**: a real attack that an analyst should look at
-  - **false_positive**: the alert fired on harmless traffic and can be closed
-- The dataset's Attack label maps to `escalate` and Non-Attack to `false_positive`.
+  - **Risky** (`risky`): a real attack that an analyst should look at
+  - **False Positive** (`false_positive`): the alert fired on harmless traffic and can be closed
+- The dataset's Attack label maps to `risky` and Non-Attack to `false_positive`. Each result row stores the answer as `verdict`, and the report calls it the Verdict.
 - Jev sees the alert as recorded: rule name, alert type, kill-chain stage, and the request and response. The label is left out, and so are the source and destination IPs and source port, which SecAlertBench replaced with random values.
 - The instructions describe what each answer means; they don't hint which one is right. The answer definitions are in `criteria.json`.
 - Two ways to ask, as in the tax eval: one choice between the two answers (default), or one yes/no "should this be escalated?" question that escalates at 0.5 or above (`-protocol noul`).
@@ -92,6 +92,55 @@ Changed only the two loose definitions, in `criteria.json` and the noul question
 - 128 alerts were fixed and 43 newly broken. The newly escalated false positives are mostly SQL-injection alerts that moved slightly (about +0.09). SQL-rule alerts shifted 0.035 on average with 75 flips each way, which is roughly the noise from any change to the instructions.
 - AUC didn't change. The wording fixes a few groups but not Jev's lean toward escalate, which is what separates its 56% accuracy from the ~92% it reaches if it escalates only at p ≥ 0.95.
 - These criteria are now frozen for model comparisons.
+
+## All profiles, one pass each (2026-10-27)
+
+After renaming the answer to a Verdict (Risky or False Positive), every profile passed a 3-alert smoke test, then ran one full pass. Results page: https://claude.ai/artifact/RQcDN7wAP389gwk5pSBExX
+
+| Setup | Accuracy | Attacks caught | False positives closed | AUC |
+|---|---|---|---|---|
+| Rule-name baseline | 92.8% | 88.3% | 94.9% | 0.982 |
+| pplx-decider v1.2 | 89.2% | 99.9% | 84.2% | 0.972 |
+| Mercury Decide | 86.8% | 98.8% | 81.2% | 0.973 |
+| d1 Ultra | 66.4% | 99.8% | 50.6% | 0.972 |
+| d1.1 | 57.0% | 100.0% | 36.6% | 0.959 |
+| Jev 1.14 | 56.4% | 99.8% | 36.0% | 0.963 |
+| GPT-6 Luna Decisions | 54.5% | 99.7% | 33.2% | 0.952 |
+| d1 | 45.8% | 100.0% | 20.3% | 0.899 |
+| Clef | 44.0% | 100.0% | 17.5% | 0.951 |
+| pplx Flash v1.2 (M5 Max) | 40.7% | 99.1% | 13.2% | 0.693 |
+| Clef Flash | 40.6% | 100.0% | 12.7% | 0.942 |
+| kev-4b | 40.3% | 99.9% | 12.1% | 0.858 |
+| pplx Flash v1.2 | 40.0% | 99.5% | 12.0% | 0.697 |
+| Solar Decide | 35.1% | 100.0% | 4.5% | 0.457 |
+
+d1 Ultra had 6 alerts with no answer and Mercury Decide 5; they count as wrong.
+
+## Third verdict: Inconclusive, one pass each (2026-10-27)
+
+`-protocol inconclusive` asks the same question with a third option: Inconclusive, "the alert does not show whether the traffic is an attack or harmless … telling them apart needs context the alert does not include." Inconclusive counts as wrong in accuracy, is kept off the misses list, and is reported on its own. `criteria.json` and the two-way questions are unchanged, so earlier runs still score. Every profile except pplx Flash on the Mac ran.
+
+| Setup | Accuracy (two-way → three-way) | Attacks caught | False positives closed | False positives rated Risky | Inconclusive | Errors |
+|---|---|---|---|---|---|---|
+| pplx-decider v1.2 | 89.2% → 86.5% | 99.8% | 80.2% | 16.1% | 2.6% | 0 |
+| Mercury Decide | 86.8% → 81.5% | 94.5% | 75.4% | 16.9% | 5.8% | 2 |
+| d1 Ultra | 66.4% → **76.2%** | 99.7% | 65.2% | 34.5% | 0.1% | 5 |
+| GPT-6 Luna Decisions | 54.5% → 55.5% | 97.0% | 35.9% | 57.2% | 4.9% | 16 |
+| d1.1 (now on OpenRouter) | 57.0% → 54.2% | 99.9% | 32.6% | 66.9% | 0.3% | 0 |
+| Jev 1.14 | 56.4% → 49.8% | 99.8% | 26.2% | 71.8% | 1.4% | 0 |
+| d1 | 45.8% → 43.6% | 99.6% | 17.2% | 75.8% | 4.9% | 0 |
+| pplx Flash v1.2 | 40.0% → 40.3% | 99.1% | 12.5% | 86.5% | 0.7% | 0 |
+| kev-4b | 40.3% → 36.6% | 98.3% | 7.5% | 85.4% | 4.4% | 40 |
+| Solar Decide | 35.1% → 34.6% | 99.9% | 3.8% | 91.6% | 3.2% | 0 |
+| Clef | 44.0% → 33.7% | 99.8% | 2.5% | 58.3% | 26.7% | 0 |
+| Clef Flash | 40.6% → 32.3% | 98.4% | 1.1% | 70.5% | 19.8% | 0 |
+
+- Most models rarely pick Inconclusive (under 6% of alerts). The Clefs are the exception, at a fifth to a quarter.
+- When they do, it's almost always on a false positive: Clef put 1,064 false positives and 2 attacks in Inconclusive. That's the right instinct, since most false positives are SQL from internal apps the alert can't vouch for. But the Clefs also stopped closing almost anything, so their accuracy fell.
+- The extra option moves the two-way call too, not just the borderline cases. d1 Ultra closed more false positives (50.6% → 65.2%) and gained 10 points. Jev closed fewer (36.0% → 26.2%) and lost 7.
+- Mercury Decide got worse on the costly mistake: 47 attacks rated False Positive, against 13 in two-way.
+- Errors are upstream: Luna had 16 gateway timeouts, kev-4b 40 client timeouts, Mercury 2 bad-gateway errors and d1 Ultra 5 rate limits. They count as wrong.
+- Conclusion: only d1 Ultra gets clearly more accurate with the third option (Luna and pplx Flash gain under a point), and no model uses Inconclusive as a precise "needs context" flag.
 
 ## Watch out for
 
