@@ -108,7 +108,11 @@ func run(args []string) error {
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
 		return err
 	}
-	out, err := os.Create(filepath.Join(*outDir, *name+".jsonl"))
+	// Answers and metadata go to .partial files that replace the named run
+	// only once every batch succeeds, so a failed rerun can't leave new
+	// answers beside the old run's metadata. score's *.jsonl glob skips them.
+	base := filepath.Join(*outDir, *name)
+	out, err := os.Create(base + ".jsonl.partial")
 	if err != nil {
 		return err
 	}
@@ -175,7 +179,16 @@ func run(args []string) error {
 		fmt.Fprintf(os.Stderr, "%s: rows %d-%d done, %d errors so far\n", *name, batch[0].Row, batch[len(batch)-1].Row, len(errs))
 	}
 	meta, _ := json.MarshalIndent(map[string]any{"profile": *profile, "protocol": *protocol, "dataset": dataset, "limit": *limit, "calls": metas, "errors": errs, "price": cost}, "", "  ")
-	return os.WriteFile(filepath.Join(*outDir, *name+".meta.json"), append(meta, '\n'), 0o644)
+	if err := out.Close(); err != nil {
+		return err
+	}
+	if err := os.WriteFile(base+".meta.json.partial", append(meta, '\n'), 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(base+".jsonl.partial", base+".jsonl"); err != nil {
+		return err
+	}
+	return os.Rename(base+".meta.json.partial", base+".meta.json")
 }
 
 // state is what the model sees: the detector's labels and the HTTP exchange,
